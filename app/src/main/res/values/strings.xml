@@ -1,4 +1,8 @@
 <resources>
     <string name="app_name">Sotsuken</string>
-    <string name="title_activity_maps">MapsActivity</string>
+    <string name="title_activity_maps">卒研</string>
+    <string name="google_maps_key">AIzaSyCARFC52yInNoO0ff0NMLFTcvU7B4AtMd8</string>
+    <string name="permission_required_toast">permission</string>
+    <string name="permission_rationale_location">alpha</string>
+    <string name="location_permission_denied">beta</string>
 </resources>
