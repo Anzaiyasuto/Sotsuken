@@ -103,15 +103,11 @@ public class MapsActivity extends FragmentActivity
         mMap.setMyLocationEnabled(true);
         updateLocationUI();
         getDeviceLocation();
-        //カメラの縮尺設定
-        mMap.setMinZoomPreference(12.0f);
-        mMap.setMaxZoomPreference(20.0f);
-
-
         //現在地設定
-
         mMap.setOnMyLocationButtonClickListener(this);
         mMap.setOnMyLocationClickListener(this);
+
+
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             // TODO: Consider calling
             //    ActivityCompat#requestPermissions
@@ -157,6 +153,7 @@ public class MapsActivity extends FragmentActivity
                 android.Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
             locationPermissionGranted = true;
+            Log.d("debug", "locationPermissionGranted = true");
         } else {
             ActivityCompat.requestPermissions(this,
                     new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION},
@@ -236,7 +233,7 @@ public class MapsActivity extends FragmentActivity
                             Log.e(TAG, "Exception: %s", task.getException());
                             mMap.moveCamera(CameraUpdateFactory
                                     .newLatLngZoom(defaultLocation, DEFAULT_ZOOM));
-                            mMap.getUiSettings().setMyLocationButtonEnabled(false);
+                            mMap.getUiSettings().setMyLocationButtonEnabled(true);
                         }
                     }
                 });
