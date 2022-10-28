@@ -6,12 +6,17 @@ import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
+import androidx.loader.content.AsyncTaskLoader;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.location.Location;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -25,12 +30,25 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.example.sotsuken.databinding.ActivityMapsBinding;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.net.PlacesClient;
 
 import org.jetbrains.annotations.NotNull;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.ArrayList;
 
 
 /***
@@ -40,15 +58,19 @@ import org.jetbrains.annotations.NotNull;
  * 起動時に現在地を表示
  * 長押しすることでマーカー出現or Androidアプリ開発の教科書14章参考
  * その後にdirectionAPI起動
+ * 経路描写
+ * xfreeサーバにAPI叩く⇔イマココ
  */
 public class MapsActivity extends FragmentActivity
         implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener,
         GoogleMap.OnMyLocationClickListener,
-        ActivityCompat.OnRequestPermissionsResultCallback, GoogleMap.OnMapLongClickListener {
+        ActivityCompat.OnRequestPermissionsResultCallback, GoogleMap.OnMapLongClickListener, GoogleMap.OnMarkerClickListener {
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
     private static final int DEFAULT_ZOOM = 15;
+    private final LatLng defaultLocation = new LatLng(35.6809591, 139.7673068);
+    Handler mMainHandler = new Handler(Looper.getMainLooper());
     private GoogleMap mMap;
     private Marker marker;
     private boolean locationPermissionGranted;
@@ -56,8 +78,6 @@ public class MapsActivity extends FragmentActivity
     private Location myLocation;
     private FusedLocationProviderClient fusedLocationProviderClient;
     private Location lastKnownLocation;
-    private final LatLng defaultLocation = new LatLng(35.6809591 ,139.7673068);
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,7 +121,8 @@ public class MapsActivity extends FragmentActivity
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(tokyo, 14.0f));
         */
         mMap.setMyLocationEnabled(true);
-        updateLocationUI();
+        //mMap.getUiSettings().setMyLocationButtonEnabled(true);
+        updateLocationUI();//こいつが現在地ボタンに影響している
         getDeviceLocation();
         //現在地設定
         mMap.setOnMyLocationButtonClickListener(this);
@@ -168,13 +189,17 @@ public class MapsActivity extends FragmentActivity
         }
         try {
             if (locationPermissionGranted) {
+                Log.d("debug", "updateLocationUI() try->if->true");
                 mMap.setMyLocationEnabled(true);
                 mMap.getUiSettings().setMyLocationButtonEnabled(true);
             } else {
+                Log.d("debug", "updateLocationUI() try->else->false");
                 mMap.setMyLocationEnabled(false);
                 mMap.getUiSettings().setMyLocationButtonEnabled(false);
                 lastKnownLocation = null;
                 getLocationPermission();
+                mMap.setMyLocationEnabled(true);
+                mMap.getUiSettings().setMyLocationButtonEnabled(true);
             }
         } catch (SecurityException e) {
             Log.e("Exception: %s", e.getMessage());
@@ -328,9 +353,163 @@ public class MapsActivity extends FragmentActivity
         }
         marker = mMap.addMarker(new MarkerOptions().position(latLng).title("(" + latLng.latitude + "," + latLng.longitude + ")"));
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 14));
-
+        mMap.setOnMarkerClickListener(this);
         //"current:("+current.latitude +","+current.longitude+ ")\ntarget:(" +
         Toast.makeText(this, latLng.latitude + "," + latLng.longitude + ")", Toast.LENGTH_LONG).show();
 
+    }
+
+    @Override
+    public boolean onMarkerClick(@NonNull Marker marker) {
+        //移動ルート取得
+        LatLng latLng = marker.getPosition();
+        Log.d("debug", String.valueOf(marker));
+        Log.d("debug", String.valueOf(latLng));
+        if(latLng == null) return false;
+
+        //URL get
+        String url = getURL(latLng);
+        AsyncTask.execute(new Runnable() {
+            @Override
+            public void run() {
+                String routeData = getRoute(url);
+                drawRoute(routeData);
+            }
+        });
+
+        return false;
+    }
+
+    private void drawRoute(String data) {
+        if (data == null) {
+            Log.w("SampleMap", "Can not draw route because of no data!!");
+            return;
+        }
+
+        JSONArray jsonArray = new JSONArray();
+        JSONArray legsArray = new JSONArray();
+        JSONArray stepArray = new JSONArray();
+        ArrayList<ArrayList<LatLng>> list = new ArrayList<>();
+
+        try {
+            JSONObject jsonObject = new JSONObject(data);
+            jsonArray = jsonObject.getJSONArray("routes");
+            for (int i = 0; i < jsonArray.length(); i++) {
+                legsArray = ((JSONObject) jsonArray.get(i)).getJSONArray("legs");
+            }
+            for (int i = 0; i < legsArray.length(); i++) {
+                stepArray = ((JSONObject) legsArray.get(i)).getJSONArray("steps");
+                for (int stepIndex = 0; stepIndex < stepArray.length(); stepIndex++) {
+                    JSONObject stepObject = stepArray.getJSONObject(stepIndex);
+                    // ルート案内で必要となるpolylineのpointsを取得し、デコード後にリストに格納
+                    list.add(decodePolyline(stepObject.getJSONObject("polyline").get("points").toString()));
+                }
+            }
+        } catch (
+                JSONException e) {
+            e.printStackTrace();
+        }
+
+        mMainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+
+                PolylineOptions polylineOptions = null;
+                polylineOptions = new PolylineOptions();
+                for (int i = 0; i < list.size(); i++) {
+                    // 経路を追加
+                    polylineOptions.addAll(list.get(i));
+                }
+                // ラインオプション設定
+                polylineOptions.width(10);
+                polylineOptions.color(Color.RED);
+                // ラインを引く
+                mMap.addPolyline(polylineOptions);
+            }
+        });
+    }
+
+    private ArrayList<LatLng> decodePolyline(String encoded) {
+        ArrayList<LatLng> point = new ArrayList<>();
+        int index = 0;
+        int len = encoded.length();
+        int lat = 0;
+        int lng = 0;
+
+        while (index < len) {
+            int b;
+            int shift = 0;
+            int result = 0;
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+
+            shift = 0;
+            result = 0;
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+
+            LatLng p = new LatLng(((double) lat / 1E5), ((double) lng / 1E5));
+            point.add(p);
+        }
+
+        return point;
+    }
+
+    private String getRoute(String string) {
+        String data = "";
+        HttpURLConnection urlConnection = null;
+        InputStream inputStream = null;
+
+        // URLからデータ取得(MainThreadからはできないので注意)
+        try {
+            URL url = new URL(string);
+            urlConnection = (HttpURLConnection) url.openConnection();
+            urlConnection.connect();
+            inputStream = urlConnection.getInputStream();
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+            StringBuffer stringBuffer = new StringBuffer();
+            String line = "";
+            while ((line = bufferedReader.readLine()) != null) {
+                stringBuffer.append(line);
+            }
+            data = stringBuffer.toString();
+            Log.d("myLog", "Download URL:" + data.toString());
+            bufferedReader.close();
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                inputStream.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            urlConnection.disconnect();
+        }
+        return data;
+    }
+
+    private String getURL(LatLng latLng) {
+        //URLの設定
+        //myLocationがヌルぽしがち
+        String str_origin = "origin=" + lastKnownLocation.getLatitude() + "," + lastKnownLocation.getLongitude();
+        String str_dest = "destination=" + latLng.latitude + "," + latLng.longitude;
+        String mode = "mode=" + "driving";
+        String parameters = str_origin + "&" + str_dest + "&" + mode;
+        String output = "json";
+        String str_url = "https://maps.googleapis.com/maps/api/directions/"
+                + output + "?" + parameters + "&key=" + getString(R.string.google_maps_key);
+        return str_url;
     }
 }
