@@ -350,6 +350,8 @@ public class MapsActivity extends FragmentActivity
         Log.d("debug", String.valueOf(current));
         if (marker != null) {
             marker.remove();
+            mMap.clear();
+
         }
         marker = mMap.addMarker(new MarkerOptions().position(latLng).title("(" + latLng.latitude + "," + latLng.longitude + ")"));
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 14));
@@ -424,6 +426,7 @@ public class MapsActivity extends FragmentActivity
                 polylineOptions.width(10);
                 polylineOptions.color(Color.RED);
                 // ラインを引く
+                //mMap.addPolyline(null);
                 mMap.addPolyline(polylineOptions);
             }
         });
