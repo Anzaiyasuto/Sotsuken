@@ -50,6 +50,12 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
 
 /***
  * 実装手順
@@ -367,19 +373,121 @@ public class MapsActivity extends FragmentActivity
         LatLng latLng = marker.getPosition();
         Log.d("debug", String.valueOf(marker));
         Log.d("debug", String.valueOf(latLng));
-        if(latLng == null) return false;
+        if (latLng == null) return false;
 
-        //URL get
+        //URL get(direction api)
         String url = getURL(latLng);
+
+        //URL get(handmade web api)
+        String apiUrl = getAPIUrl(latLng);
+
         AsyncTask.execute(new Runnable() {
             @Override
             public void run() {
                 String routeData = getRoute(url);
                 drawRoute(routeData);
+
+                String feedback = getTrafficData(apiUrl);
+                Log.i("debug", feedback);
+                //Toast.makeText(this, "aaa", Toast.LENGTH_LONG).show();
             }
         });
 
         return false;
+    }
+
+    private String getTrafficData(String apiUrl) {
+        try {
+            Log.i("debug", "1");
+            httpRequest(apiUrl);
+        } catch (Exception e) {
+        }
+        return null;
+    }
+
+    private void httpRequest(String url) {
+        OkHttpClient client = new OkHttpClient();
+
+        Request request = new Request.Builder().url(url).build();
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e("Hoge", e.getMessage());
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                final String jsonStr = response.body().string();
+                String status = null, message = null, comment = null;
+                Log.d("Hoge", "jsonStr=" + jsonStr);
+
+                try {
+                    JSONArray jsonArray = new JSONArray(jsonStr);
+                    for (int i = 0; i < jsonArray.length(); i++) {
+                        JSONObject jsonObject = jsonArray.getJSONObject(i);
+                        //status = jsonObject.getString("id");
+                        //message = jsonObject.getString("name");
+                        comment = jsonObject.getString("comment");
+                    }
+
+
+                    Handler mainHandler = new Handler(Looper.getMainLooper());
+                    //String finalMessage = messag;
+                    //String finalStatus = status;
+                    String finalComment = comment;
+                    mainHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            //txt01.setText(finalComment);
+                            Toast.makeText(getApplicationContext(), finalComment, Toast.LENGTH_LONG);
+                        }
+                    });
+
+
+                } catch (Exception e) {
+                    Log.e("Hoge", e.getMessage());
+                }
+            }
+        });
+    }
+
+    private String getAPIUrl(LatLng latLng) {
+        //URLの設定
+        //myLocationがヌルぽしがち
+        /*
+        String str_origin = "origin=" + lastKnownLocation.getLatitude() + "," + lastKnownLocation.getLongitude();
+        String str_dest = "destination=" + latLng.latitude + "," + latLng.longitude;
+        String mode = "mode=" + "driving";
+        String parameters = str_origin + "&" + str_dest + "&" + mode;
+        String output = "json";
+        String str_url = "https://maps.googleapis.com/maps/api/directions/"
+                + output + "?" + parameters + "&key=" + getString(R.string.google_maps_key);
+        Log.i("INFORMATION", str_url);
+        return str_url;
+         */
+
+        float minX = (float) lastKnownLocation.getLatitude();
+        float minY = (float) lastKnownLocation.getLongitude();
+        float maxX = (float) latLng.latitude;
+        float maxY = (float) latLng.longitude;
+        float tempX = 0;
+        float tempY = 0;
+
+        if (minX > maxX) {
+            tempX = minX;
+            minX = maxX;
+            maxX = tempX;
+        }
+        if (minY > maxY) {
+            tempY = minY;
+            minY = maxY;
+            maxY = tempY;
+        }
+
+        String str_url = "http://al18011.php.xdomain.jp/webapi2.php?";
+        String parameter = "minX=" + minX + "&minY=" + minY + "&maxX=" + maxX + "&maxY=" + maxY;
+        str_url = str_url + parameter;
+        return str_url;
     }
 
     private void drawRoute(String data) {
@@ -513,6 +621,7 @@ public class MapsActivity extends FragmentActivity
         String output = "json";
         String str_url = "https://maps.googleapis.com/maps/api/directions/"
                 + output + "?" + parameters + "&key=" + getString(R.string.google_maps_key);
+        Log.i("INFORMATION", str_url);
         return str_url;
     }
 }
