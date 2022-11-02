@@ -6,7 +6,6 @@ import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
-import androidx.loader.content.AsyncTaskLoader;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -29,14 +28,12 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.example.sotsuken.databinding.ActivityMapsBinding;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.net.PlacesClient;
 
-import org.jetbrains.annotations.NotNull;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -66,6 +63,8 @@ import okhttp3.Response;
  * その後にdirectionAPI起動
  * 経路描写
  * xfreeサーバにAPI叩く⇔イマココ
+ * dbサーバに接続して指定した経路の事故データゲット(仮設置)
+ * 経路を含む運転区間の最大最小緯度経度を算出(polyline)
  */
 public class MapsActivity extends FragmentActivity
         implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener,
@@ -365,6 +364,9 @@ public class MapsActivity extends FragmentActivity
         //"current:("+current.latitude +","+current.longitude+ ")\ntarget:(" +
         Toast.makeText(this, latLng.latitude + "," + latLng.longitude + ")", Toast.LENGTH_LONG).show();
 
+        //20221102
+        //最終的に冗長
+
     }
 
     @Override
@@ -385,10 +387,13 @@ public class MapsActivity extends FragmentActivity
             @Override
             public void run() {
                 String routeData = getRoute(url);
+                Log.i("onMarkerClick", "url = " + url);
                 drawRoute(routeData);
-
+                //エリア再定義
+                drawSquare(routeData);
+                Log.i("onMarkerClick", "apiUrl = " + apiUrl);
                 String feedback = getTrafficData(apiUrl);
-                Log.i("debug", feedback);
+                //Log.i("debug", feedback);
                 //Toast.makeText(this, "aaa", Toast.LENGTH_LONG).show();
             }
         });
@@ -396,16 +401,102 @@ public class MapsActivity extends FragmentActivity
         return false;
     }
 
-    private String getTrafficData(String apiUrl) {
-        try {
-            Log.i("debug", "1");
-            httpRequest(apiUrl);
-        } catch (Exception e) {
+    private void drawSquare(String data) {
+        if (data == null) {
+            Log.w("SampleMap", "Can not draw route because of no data!!");
+            return;
         }
-        return null;
+
+        JSONArray jsonArray = new JSONArray();
+        JSONArray legsArray = new JSONArray();
+        JSONArray stepArray = new JSONArray();
+        //ArrayList<ArrayList<LatLng>> list = new ArrayList<>();
+        ArrayList<Double> route_latitude = new ArrayList<>();
+        ArrayList<Double> route_longitude = new ArrayList<>();
+
+
+        try {
+            JSONObject jsonObject = new JSONObject(data);
+            jsonArray = jsonObject.getJSONArray("routes");
+            for (int i = 0; i < jsonArray.length(); i++) {
+                legsArray = ((JSONObject) jsonArray.get(i)).getJSONArray("legs");
+            }
+            for (int i = 0; i < legsArray.length(); i++) {
+                stepArray = ((JSONObject) legsArray.get(i)).getJSONArray("steps");
+                for (int stepIndex = 0; stepIndex < stepArray.length(); stepIndex++) {
+                    JSONObject stepObject = stepArray.getJSONObject(stepIndex);
+                    // ルート案内で必要となるpolylineのpointsを取得し、デコード後にリストに格納
+                    //list.add(decodePolyline(stepObject.getJSONObject("polyline").get("points").toString()));
+                    route_latitude.add(stepObject.getJSONObject("end_location").getDouble("lat"));
+                    route_longitude.add(stepObject.getJSONObject("end_location").getDouble("lng"));
+                }
+            }
+        } catch (
+                JSONException e) {
+            e.printStackTrace();
+        }
+
+        mMainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+
+                PolylineOptions polylineOptions = null;
+                polylineOptions = new PolylineOptions();
+                Double minX, maxX, minY, maxY;
+
+                //
+                Log.i("route_latitude =", String.valueOf(route_latitude));
+                Log.i("route_longitude =", String.valueOf(route_longitude));
+
+                //2点間の長方形を作成
+                // ラインオプション設定
+                polylineOptions.width(10);
+                polylineOptions.color(Color.BLACK);
+                // ラインを引く
+                //mMap.addPolyline(null);
+
+                minX = getListOfMin(route_latitude, lastKnownLocation.getLatitude());
+                maxX = getListOfMax(route_latitude, lastKnownLocation.getLatitude());
+                minY = getListOfMin(route_longitude, lastKnownLocation.getLongitude());
+                maxY = getListOfMax(route_longitude, lastKnownLocation.getLongitude());
+
+                polylineOptions.add(new LatLng(minX, minY))
+                        .add(new LatLng(maxX, minY))
+                        .add(new LatLng(maxX, maxY))
+                        .add(new LatLng(minX, maxY))
+                        .add(new LatLng(minX, minY));
+
+                mMap.addPolyline(polylineOptions);
+            }
+
+            private Double getListOfMax(ArrayList<Double> point, double start) {
+                Double max = start;
+
+                for (int i = 0; i < point.size(); i++) {
+                    if(max < point.get(i)) {
+                        max = point.get(i);
+                    }
+                }
+
+                return max;
+            }
+
+            private Double getListOfMin(ArrayList<Double> point, double start) {
+                Double min = start;
+
+                for (int i = 0; i < point.size(); i++) {
+                    if(min > point.get(i)) {
+                        min = point.get(i);
+                    }
+                }
+
+                return min;
+            }
+        });
     }
 
-    private void httpRequest(String url) {
+    private String getTrafficData(String url) {
+        final String[] comment = {null};
         OkHttpClient client = new OkHttpClient();
 
         Request request = new Request.Builder().url(url).build();
@@ -418,7 +509,7 @@ public class MapsActivity extends FragmentActivity
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 final String jsonStr = response.body().string();
-                String status = null, message = null, comment = null;
+                String status = null, message = null;
                 Log.d("Hoge", "jsonStr=" + jsonStr);
 
                 try {
@@ -427,14 +518,14 @@ public class MapsActivity extends FragmentActivity
                         JSONObject jsonObject = jsonArray.getJSONObject(i);
                         //status = jsonObject.getString("id");
                         //message = jsonObject.getString("name");
-                        comment = jsonObject.getString("comment");
+                        comment[0] = jsonObject.getString("comment");
                     }
 
 
                     Handler mainHandler = new Handler(Looper.getMainLooper());
                     //String finalMessage = messag;
                     //String finalStatus = status;
-                    String finalComment = comment;
+                    String finalComment = comment[0];
                     mainHandler.post(new Runnable() {
                         @Override
                         public void run() {
@@ -449,7 +540,9 @@ public class MapsActivity extends FragmentActivity
                 }
             }
         });
+        return comment[0];
     }
+
 
     private String getAPIUrl(LatLng latLng) {
         //URLの設定
@@ -513,6 +606,8 @@ public class MapsActivity extends FragmentActivity
                     JSONObject stepObject = stepArray.getJSONObject(stepIndex);
                     // ルート案内で必要となるpolylineのpointsを取得し、デコード後にリストに格納
                     list.add(decodePolyline(stepObject.getJSONObject("polyline").get("points").toString()));
+
+
                 }
             }
         } catch (
@@ -529,7 +624,10 @@ public class MapsActivity extends FragmentActivity
                 for (int i = 0; i < list.size(); i++) {
                     // 経路を追加
                     polylineOptions.addAll(list.get(i));
+                    //Log.i("polylineOptions", String.valueOf(list.get(i)));
                 }
+
+                //2点間の長方形を作成
                 // ラインオプション設定
                 polylineOptions.width(10);
                 polylineOptions.color(Color.RED);
