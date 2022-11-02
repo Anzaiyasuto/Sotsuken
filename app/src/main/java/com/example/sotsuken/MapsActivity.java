@@ -65,6 +65,7 @@ import okhttp3.Response;
  * xfreeサーバにAPI叩く⇔イマココ
  * dbサーバに接続して指定した経路の事故データゲット(仮設置)
  * 経路を含む運転区間の最大最小緯度経度を算出(polyline)
+ * DirectionJSONファイルから道案内(html_instructions)を抽出＆文字コード整形＆音声案内登録
  */
 public class MapsActivity extends FragmentActivity
         implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener,
@@ -592,8 +593,10 @@ public class MapsActivity extends FragmentActivity
         JSONArray jsonArray = new JSONArray();
         JSONArray legsArray = new JSONArray();
         JSONArray stepArray = new JSONArray();
+        JSONArray htmlArray = new JSONArray();
         ArrayList<ArrayList<LatLng>> list = new ArrayList<>();
-
+        ArrayList<String> navigationList = new ArrayList<>();
+        String alpha = null;
         try {
             JSONObject jsonObject = new JSONObject(data);
             jsonArray = jsonObject.getJSONArray("routes");
@@ -606,8 +609,10 @@ public class MapsActivity extends FragmentActivity
                     JSONObject stepObject = stepArray.getJSONObject(stepIndex);
                     // ルート案内で必要となるpolylineのpointsを取得し、デコード後にリストに格納
                     list.add(decodePolyline(stepObject.getJSONObject("polyline").get("points").toString()));
-
-
+                    alpha = stepObject.getString("html_instructions");
+                    Log.i("alpha", alpha);
+                    //Log.i("step.object", String.valueOf(stepObject.getJSONObject("html_instructions")));
+                    //navigationList.add(stepObject.getJSONObject("html_instructions");
                 }
             }
         } catch (
@@ -615,6 +620,7 @@ public class MapsActivity extends FragmentActivity
             e.printStackTrace();
         }
 
+        JSONArray finalHtmlArray = htmlArray;
         mMainHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -626,7 +632,8 @@ public class MapsActivity extends FragmentActivity
                     polylineOptions.addAll(list.get(i));
                     //Log.i("polylineOptions", String.valueOf(list.get(i)));
                 }
-
+                Log.i("html", String.valueOf(finalHtmlArray));
+                //Log.i("navigationList", String.valueOf(navigationList));
                 //2点間の長方形を作成
                 // ラインオプション設定
                 polylineOptions.width(10);
