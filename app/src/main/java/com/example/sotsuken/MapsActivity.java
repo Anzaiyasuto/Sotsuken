@@ -596,7 +596,7 @@ public class MapsActivity extends FragmentActivity
         JSONArray htmlArray = new JSONArray();
         ArrayList<ArrayList<LatLng>> list = new ArrayList<>();
         ArrayList<String> navigationList = new ArrayList<>();
-        String alpha = null;
+        String alpha = null, beta = null;
         try {
             JSONObject jsonObject = new JSONObject(data);
             jsonArray = jsonObject.getJSONArray("routes");
@@ -610,7 +610,13 @@ public class MapsActivity extends FragmentActivity
                     // ルート案内で必要となるpolylineのpointsを取得し、デコード後にリストに格納
                     list.add(decodePolyline(stepObject.getJSONObject("polyline").get("points").toString()));
                     alpha = stepObject.getString("html_instructions");
-                    Log.i("alpha", alpha);
+                    if(i > 0) beta = stepObject.getString("maneuver");
+                    if(beta == null) {
+                        Log.i("maneuver", beta);
+                    } else {
+                        Log.i("maneuver", "go straight");
+                    }
+                    //Log.i("alpha", alpha);
                     //Log.i("step.object", String.valueOf(stepObject.getJSONObject("html_instructions")));
                     //navigationList.add(stepObject.getJSONObject("html_instructions");
                 }
@@ -725,7 +731,9 @@ public class MapsActivity extends FragmentActivity
         String parameters = str_origin + "&" + str_dest + "&" + mode;
         String output = "json";
         String str_url = "https://maps.googleapis.com/maps/api/directions/"
-                + output + "?" + parameters + "&key=" + getString(R.string.google_maps_key);
+                + output + "?" + parameters  + "&region=ja"+ "&key=" + getString(R.string.google_maps_key);
+        //debug
+        //str_url = "https://maps.googleapis.com/maps/api/directions/json?origin=35.94930742542948,%20139.65396618863628&destination=35.93944021019093,%20139.63276601021752&mode=driving&key=AIzaSyCARFC52yInNoO0ff0NMLFTcvU7B4AtMd8";
         Log.i("INFORMATION", str_url);
         return str_url;
     }
