@@ -16,6 +16,8 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -70,7 +72,7 @@ import okhttp3.Response;
 public class MapsActivity extends FragmentActivity
         implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener,
         GoogleMap.OnMyLocationClickListener,
-        ActivityCompat.OnRequestPermissionsResultCallback, GoogleMap.OnMapLongClickListener, GoogleMap.OnMarkerClickListener {
+        ActivityCompat.OnRequestPermissionsResultCallback, GoogleMap.OnMapLongClickListener, GoogleMap.OnMarkerClickListener, TextToSpeech.OnInitListener {
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
@@ -84,6 +86,7 @@ public class MapsActivity extends FragmentActivity
     private Location myLocation;
     private FusedLocationProviderClient fusedLocationProviderClient;
     private Location lastKnownLocation;
+    private TextToSpeech tts;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,6 +98,9 @@ public class MapsActivity extends FragmentActivity
         Places.initialize(getApplicationContext(), getString(R.string.google_maps_key));
         PlacesClient placesClient = Places.createClient(this);
         fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
+
+        //11.4
+        tts = new TextToSpeech(this, this);
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -399,7 +405,62 @@ public class MapsActivity extends FragmentActivity
             }
         });
 
+        //11.4
+        //仮実装
+        String text = "600m先,右折してください";
+        speechText(text);
+
         return false;
+    }
+
+    private void speechText(String text) {
+        if (0 < text.length()) {
+            if (tts.isSpeaking()) {
+                tts.stop();
+                return;
+            }
+            setSpeechRate();
+            setSpeechPitch();
+
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "messageID");
+            setTtsListener();
+        }
+    }
+
+    private void setTtsListener() {
+        int listenerResult =
+                tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                    @Override
+                    public void onDone(String utteranceId) {
+                        Log.d("setTtsListener", "progress on Done " + utteranceId);
+                    }
+
+                    @Override
+                    public void onError(String utteranceId) {
+                        Log.d("setTtsListener", "progress on Error " + utteranceId);
+                    }
+
+                    @Override
+                    public void onStart(String utteranceId) {
+                        Log.d("setTtsListener", "progress on Start " + utteranceId);
+                    }
+                });
+
+        if (listenerResult != TextToSpeech.SUCCESS) {
+            Log.e("setTtsListener", "failed to add utterance progress listener");
+        }
+    }
+
+    private void setSpeechPitch() {
+        if (null != tts) {
+            tts.setPitch((float) 1.0);
+        }
+    }
+
+    private void setSpeechRate() {
+        if (null != tts) {
+            tts.setSpeechRate((float) 1.0);
+        }
     }
 
     private void drawSquare(String data) {
@@ -474,7 +535,7 @@ public class MapsActivity extends FragmentActivity
                 Double max = start;
 
                 for (int i = 0; i < point.size(); i++) {
-                    if(max < point.get(i)) {
+                    if (max < point.get(i)) {
                         max = point.get(i);
                     }
                 }
@@ -486,7 +547,7 @@ public class MapsActivity extends FragmentActivity
                 Double min = start;
 
                 for (int i = 0; i < point.size(); i++) {
-                    if(min > point.get(i)) {
+                    if (min > point.get(i)) {
                         min = point.get(i);
                     }
                 }
@@ -596,31 +657,54 @@ public class MapsActivity extends FragmentActivity
         JSONArray htmlArray = new JSONArray();
         ArrayList<ArrayList<LatLng>> list = new ArrayList<>();
         ArrayList<String> navigationList = new ArrayList<>();
-        String alpha = null, beta = null;
+        String alpha = null;
+        JSONObject beta = null;
         try {
             JSONObject jsonObject = new JSONObject(data);
             jsonArray = jsonObject.getJSONArray("routes");
             for (int i = 0; i < jsonArray.length(); i++) {
                 legsArray = ((JSONObject) jsonArray.get(i)).getJSONArray("legs");
-            }
-            for (int i = 0; i < legsArray.length(); i++) {
-                stepArray = ((JSONObject) legsArray.get(i)).getJSONArray("steps");
-                for (int stepIndex = 0; stepIndex < stepArray.length(); stepIndex++) {
-                    JSONObject stepObject = stepArray.getJSONObject(stepIndex);
-                    // ルート案内で必要となるpolylineのpointsを取得し、デコード後にリストに格納
-                    list.add(decodePolyline(stepObject.getJSONObject("polyline").get("points").toString()));
-                    alpha = stepObject.getString("html_instructions");
-                    if(i > 0) beta = stepObject.getString("maneuver");
-                    if(beta == null) {
-                        Log.i("maneuver", beta);
-                    } else {
-                        Log.i("maneuver", "go straight");
+                for (int j = 0; j < legsArray.length(); j++) {
+                    stepArray = ((JSONObject) legsArray.get(j)).getJSONArray("steps");
+
+                    for (int stepIndex = 0; stepIndex < stepArray.length(); stepIndex++) {
+                        //String polyline= "";
+                        //polyline = (String)((JSONObject)((JSONObject)stepArray.get(stepIndex)).get("polyline")).get("points");
+                        JSONObject stepObject = stepArray.getJSONObject(stepIndex);
+                        // ルート案内で必要となるpolylineのpointsを取得し、デコード後にリストに格納
+                        list.add(decodePolyline(stepObject.getJSONObject("polyline").get("points").toString()));
+                        //alpha = stepObject.getString("html_instructions");
+                        //if(i > 0) beta = stepObject.getString("maneuver");
+                        //beta = stepObject.getJSONObject("maneuver");
+                        String instructions = (String) ((JSONObject) (JSONObject) stepArray.get(stepIndex)).getString("html_instructions");
+                        String maneuver = null, distance_txt = null, duration_txt = null;
+                        if (stepIndex > 0) {
+                            maneuver = (String) ((JSONObject) (JSONObject) stepArray.get(stepIndex)).getString("maneuver");
+                            distance_txt = (String) ((JSONObject) ((JSONObject) stepArray.get(stepIndex)).get("distance")).getString("value");
+                            duration_txt = (String) ((JSONObject) ((JSONObject) stepArray.get(stepIndex)).get("duration")).getString("value");
+                        }
+
+                        if (maneuver != null) {
+                            /**
+                             *  polyline = (String)((JSONObject)((JSONObject)jsonSteps.get(k)).get("polyline")).get("points");
+                             *
+                             *
+                             *  String instructions = (String)((JSONObject)(JSONObject)jsonSteps.get(k)).getString("html_instructions");
+                             */
+                            Log.i("separete", "--------------------------------------");
+                            //Log.i("html_instructions", instructions);
+                            Log.i("maneuver", maneuver + ":distance=" + distance_txt + ":duration:" + duration_txt);
+                            Log.i("separete", "--------------------------------------");
+                        } else {
+                            Log.i("maneuver", "go straight");
+                        }
+                        //Log.i("alpha", alpha);
+                        //Log.i("step.object", String.valueOf(stepObject.getJSONObject("html_instructions")));
+                        //navigationList.add(stepObject.getJSONObject("html_instructions");
                     }
-                    //Log.i("alpha", alpha);
-                    //Log.i("step.object", String.valueOf(stepObject.getJSONObject("html_instructions")));
-                    //navigationList.add(stepObject.getJSONObject("html_instructions");
                 }
             }
+
         } catch (
                 JSONException e) {
             e.printStackTrace();
@@ -638,7 +722,7 @@ public class MapsActivity extends FragmentActivity
                     polylineOptions.addAll(list.get(i));
                     //Log.i("polylineOptions", String.valueOf(list.get(i)));
                 }
-                Log.i("html", String.valueOf(finalHtmlArray));
+                //Log.i("html", String.valueOf(finalHtmlArray));
                 //Log.i("navigationList", String.valueOf(navigationList));
                 //2点間の長方形を作成
                 // ラインオプション設定
@@ -731,10 +815,27 @@ public class MapsActivity extends FragmentActivity
         String parameters = str_origin + "&" + str_dest + "&" + mode;
         String output = "json";
         String str_url = "https://maps.googleapis.com/maps/api/directions/"
-                + output + "?" + parameters  + "&region=ja"+ "&key=" + getString(R.string.google_maps_key);
+                + output + "?" + parameters + "&region=ja" + "&key=" + getString(R.string.google_maps_key);
         //debug
         //str_url = "https://maps.googleapis.com/maps/api/directions/json?origin=35.94930742542948,%20139.65396618863628&destination=35.93944021019093,%20139.63276601021752&mode=driving&key=AIzaSyCARFC52yInNoO0ff0NMLFTcvU7B4AtMd8";
         Log.i("INFORMATION", str_url);
         return str_url;
+    }
+
+    @Override
+    public void onInit(int status) {
+        if (TextToSpeech.SUCCESS == status) {
+            Log.d("onInit", "TextToSpeech initialize");
+        } else {
+            Log.d("onInit", "TextToSpeech failed");
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (null != tts) {
+            tts.shutdown();
+        }
     }
 }

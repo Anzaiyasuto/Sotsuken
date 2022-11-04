@@ -1,0 +1,73 @@
+[
+  {
+    "distance": {
+      "text": "0.2 km",
+      "value": 172
+    },
+    "duration": {
+      "text": "1 min",
+      "value": 57
+    },
+    "end_location": {
+      "lat": 35.6595101,
+      "lng": 139.794985
+    },
+    "html_instructions": "Head <b>southwest<\/b><div style=\"font-size:0.9em\">Restricted usage road<\/div>",
+    "polyline": {
+      "points": "y}sxEy{ftYXb@@B@B@@?B@D?B@@@B@@V\\b@h@FHHHTZTX@BFF@@@?@?@?@?@?@A@?@ADENKFG"
+    },
+    "start_location": {
+      "lat": 35.6606054,
+      "lng": 139.7959742
+    },
+    "travel_mode": "DRIVING"
+  },
+  {
+    "distance": {
+      "text": "0.2 km",
+      "value": 226
+    },
+    "duration": {
+      "text": "1 min",
+      "value": 82
+    },
+    "end_location": {
+      "lat": 35.6582276,
+      "lng": 139.7930503
+    },
+    "html_instructions": "Turn <b>right<\/b>",
+    "maneuver": "turn-right",
+    "polyline": {
+      "points": "}vsxEsuftYPVb@t@d@z@x@tAn@fAh@~@BDJR"
+    },
+    "start_location": {
+      "lat": 35.6595101,
+      "lng": 139.794985
+    },
+    "travel_mode": "DRIVING"
+  },
+  {
+    "distance": {
+      "text": "1.4 km",
+      "value": 1369
+    },
+    "duration": {
+      "text": "4 mins",
+      "value": 262
+    },
+    "end_location": {
+      "lat": 35.6483155,
+      "lng": 139.8016432
+    },
+    "html_instructions": "Turn <b>left<\/b> onto <b>晴海通り<\/b>\/<wbr\/><b>都道304号<\/b><div style=\"font-size:0.9em\">Destination will be on the left<\/div>",
+    "maneuver": "turn-left",
+    "polyline": {
+      "points": "}nsxEqiftYHMFIFENOJKh@i@\\]ZYHIPQZYX[@?ZYBCDE`@e@f@g@TWBANO@Aj@g@\\]XUPORQFGf@e@JMf@e@Z]Z[DCBEJKPWXWPQBCx@y@@A|@{@LQVYZYJKHIPQZ[TUHMZYr@s@v@u@nAmA\\[JKHI`@_@?AZYTUPKBEHGFE\\]JIPOX[@?JKNOZY@A\\_@BE\\YDEDCHIFE@?HENEf@Ej@Eh@EF?jAMJAb@C"
+    },
+    "start_location": {
+      "lat": 35.6582276,
+      "lng": 139.7930503
+    },
+    "travel_mode": "DRIVING"
+  }
+]
