@@ -2,11 +2,6 @@ package com.example.sotsuken;
 
 import static androidx.constraintlayout.helper.widget.MotionEffect.TAG;
 
-import androidx.annotation.NonNull;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import androidx.fragment.app.FragmentActivity;
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
@@ -20,6 +15,11 @@ import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.util.Log;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.fragment.app.FragmentActivity;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
@@ -676,12 +676,12 @@ public class MapsActivity extends FragmentActivity
                         //alpha = stepObject.getString("html_instructions");
                         //if(i > 0) beta = stepObject.getString("maneuver");
                         //beta = stepObject.getJSONObject("maneuver");
-                        String instructions = (String) ((JSONObject) (JSONObject) stepArray.get(stepIndex)).getString("html_instructions");
+                        String instructions = ((JSONObject) stepArray.get(stepIndex)).getString("html_instructions");
                         String maneuver = null, distance_txt = null, duration_txt = null;
                         if (stepIndex > 0) {
-                            maneuver = (String) ((JSONObject) (JSONObject) stepArray.get(stepIndex)).getString("maneuver");
-                            distance_txt = (String) ((JSONObject) ((JSONObject) stepArray.get(stepIndex)).get("distance")).getString("value");
-                            duration_txt = (String) ((JSONObject) ((JSONObject) stepArray.get(stepIndex)).get("duration")).getString("value");
+                            maneuver = ((JSONObject) stepArray.get(stepIndex)).getString("maneuver");
+                            distance_txt = ((JSONObject) ((JSONObject) stepArray.get(stepIndex)).get("distance")).getString("value");
+                            duration_txt = ((JSONObject) ((JSONObject) stepArray.get(stepIndex)).get("duration")).getString("value");
                         }
 
                         if (maneuver != null) {
@@ -789,7 +789,7 @@ public class MapsActivity extends FragmentActivity
                 stringBuffer.append(line);
             }
             data = stringBuffer.toString();
-            Log.d("myLog", "Download URL:" + data.toString());
+            Log.d("myLog", "Download URL:" + data);
             bufferedReader.close();
         } catch (MalformedURLException e) {
             e.printStackTrace();
