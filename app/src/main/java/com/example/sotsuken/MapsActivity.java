@@ -78,6 +78,7 @@ import okhttp3.Response;
  *
  * 2022年11月29日やること
  * ジオフェンスの設定
+ * 音声案内登録
  * DirectionJSONファイルの解析とジオフェンスによる音声案内登録
  */
 public class MapsActivity extends FragmentActivity
@@ -380,7 +381,7 @@ public class MapsActivity extends FragmentActivity
         if (marker != null) {
             marker.remove();
             mMap.clear();
-
+            geofencingClient.removeGeofences(geofenceHelper.getPendingIntent());
         }
         marker = mMap.addMarker(new MarkerOptions().position(latLng).title("(" + latLng.latitude + "," + latLng.longitude + ")"));
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 14));
@@ -390,7 +391,7 @@ public class MapsActivity extends FragmentActivity
 
         //20221102
         //最終的に冗長
-        handleMapLongClick(latLng);
+        //handleMapLongClick(latLng);
 
     }
 
@@ -404,9 +405,7 @@ public class MapsActivity extends FragmentActivity
         Geofence geofence = geofenceHelper.getGeofence(GEOFENCE_ID, latLng, radius, Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT);
         GeofencingRequest geofencingRequest = geofenceHelper.getGeofencingRequest(geofence);
         PendingIntent pendingIntent = null;
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            pendingIntent = geofenceHelper.getPendingIntent();
-        }
+        pendingIntent = geofenceHelper.getPendingIntent();
 
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -726,6 +725,11 @@ public class MapsActivity extends FragmentActivity
         ArrayList<String> navigationList = new ArrayList<>();
         String alpha = null;
         JSONObject beta = null;
+        String distance = null;
+        ArrayList<Double> route_latitude = new ArrayList<>();
+        ArrayList<Double> route_longitude = new ArrayList<>();
+        ArrayList<Double> route_distance = new ArrayList<>();
+        ArrayList<String> route_maneuver = new ArrayList<>();
         try {
             JSONObject jsonObject = new JSONObject(data);
             jsonArray = jsonObject.getJSONArray("routes");
@@ -743,12 +747,26 @@ public class MapsActivity extends FragmentActivity
                         //alpha = stepObject.getString("html_instructions");
                         //if(i > 0) beta = stepObject.getString("maneuver");
                         //beta = stepObject.getJSONObject("maneuver");
-                        String instructions = ((JSONObject) stepArray.get(stepIndex)).getString("html_instructions");
+                        //String instructions = ((JSONObject) stepArray.get(stepIndex)).getString("html_instructions");
+                        //JSONObject stepObject = stepArray.getJSONObject(stepIndex);
+                        // ルート案内で必要となるpolylineのpointsを取得し、デコード後にリストに格納
+                        //list.add(decodePolyline(stepObject.getJSONObject("polyline").get("points").toString()));
+                        //Log.d("LIST" , String.valueOf(list));
+                        route_latitude.add(stepObject.getJSONObject("end_location").getDouble("lat"));
+                        route_longitude.add(stepObject.getJSONObject("end_location").getDouble("lng"));
+                        route_distance.add(stepObject.getJSONObject("distance").getDouble("value"));
+
                         String maneuver = null, distance_txt = null, duration_txt = null;
                         if (stepIndex > 0) {
                             maneuver = ((JSONObject) stepArray.get(stepIndex)).getString("maneuver");
+                            route_maneuver.add(stepObject.getString("maneuver"));
+                            //distance = String.valueOf(((JSONObject) stepArray.get(stepIndex)).getJSONObject("end_location"));
                             distance_txt = ((JSONObject) ((JSONObject) stepArray.get(stepIndex)).get("distance")).getString("value");
                             duration_txt = ((JSONObject) ((JSONObject) stepArray.get(stepIndex)).get("duration")).getString("value");
+
+
+                        } else {
+                            distance_txt = ((JSONObject) ((JSONObject) stepArray.get(stepIndex)).get("distance")).getString("value");
                         }
 
                         if (maneuver != null) {
@@ -761,9 +779,10 @@ public class MapsActivity extends FragmentActivity
                             Log.i("separete", "--------------------------------------");
                             //Log.i("html_instructions", instructions);
                             Log.i("maneuver", maneuver + ":distance=" + distance_txt + ":duration:" + duration_txt);
+                            //addCircle();
                             Log.i("separete", "--------------------------------------");
-                        } else {
-                            Log.i("maneuver", "go straight");
+                        } else  {
+                            Log.i("maneuver", "go straight" + distance_txt);
                         }
                         //Log.i("alpha", alpha);
                         //Log.i("step.object", String.valueOf(stepObject.getJSONObject("html_instructions")));
@@ -776,6 +795,10 @@ public class MapsActivity extends FragmentActivity
                 JSONException e) {
             e.printStackTrace();
         }
+        Log.d("lat", String.valueOf(route_latitude));
+        Log.d("lon", String.valueOf(route_longitude));
+        Log.d("distance", String.valueOf(route_distance));
+        Log.d("maneuver", String.valueOf(route_maneuver));
 
         JSONArray finalHtmlArray = htmlArray;
         mMainHandler.post(new Runnable() {
@@ -798,6 +821,20 @@ public class MapsActivity extends FragmentActivity
                 // ラインを引く
                 //mMap.addPolyline(null);
                 mMap.addPolyline(polylineOptions);
+
+                //2022.11.30
+                for (int i = 0; i < route_distance.size(); i++) {
+                    LatLng latLng = new LatLng(route_latitude.get(i), route_longitude.get(i));
+                    addCircle(latLng, GEOFENCE_RADIUS);
+                    addGeofence(latLng, GEOFENCE_RADIUS);
+                    if (i >= 0) {
+                        marker = mMap.addMarker(new MarkerOptions().position(latLng).title("announce:" + "straight" +" distance:" + route_distance.get(i)));
+                    } else {
+                        //marker = mMap.addMarker(new MarkerOptions().position(latLng).title("announce:" + route_maneuver.get(i-1) +" distance:" + route_distance.get(i)));
+
+                    }
+
+                }
             }
         });
     }

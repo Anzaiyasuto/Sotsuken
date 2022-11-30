@@ -19,16 +19,14 @@ import java.util.Random;
 public class NotificationHelper extends ContextWrapper {
 
     private static final String TAG = "NotificationHelper";
-
+    private String CHANNEL_NAME = "High priority channel";
+    private String CHANNEL_ID = "com.example.notifications" + CHANNEL_NAME;
     public NotificationHelper(Context base) {
         super(base);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             createChannels();
         }
     }
-
-    private String CHANNEL_NAME = "High priority channel";
-    private String CHANNEL_ID = "com.example.notifications" + CHANNEL_NAME;
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     private void createChannels() {

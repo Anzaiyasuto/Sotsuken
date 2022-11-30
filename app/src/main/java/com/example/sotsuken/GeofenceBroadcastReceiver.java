@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -15,6 +17,7 @@ import java.util.List;
 public class GeofenceBroadcastReceiver extends BroadcastReceiver {
 
     private static final String TAG = "GeofenceBroadcast";
+    private TextToSpeech tts;
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -42,18 +45,65 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
         switch (transitionType) {
             case Geofence.GEOFENCE_TRANSITION_ENTER:
                 Toast.makeText(context, "GEOFENCE_TRANSITION_ENTER", Toast.LENGTH_SHORT).show();
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    notificationHelper.sendHighPriorityNotification("GEOFENCE_TRANSITION_ENTER", "", MapsActivity.class);
-                }
+                //speechText("直進");
+                notificationHelper.sendHighPriorityNotification("GEOFENCE_TRANSITION_ENTER", "", MapsActivity.class);
                 break;
             case Geofence.GEOFENCE_TRANSITION_EXIT:
                 Toast.makeText(context, "GEOFENCE_TRANSITION_EXIT", Toast.LENGTH_SHORT).show();
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    notificationHelper.sendHighPriorityNotification("GEOFENCE_TRANSITION_EXIT", "", MapsActivity.class);
-                }
+                notificationHelper.sendHighPriorityNotification("GEOFENCE_TRANSITION_EXIT", "", MapsActivity.class);
                 break;
         }
 
 
+    }
+
+    private void speechText(String text) {
+        if (0 < text.length()) {
+            if (tts.isSpeaking()) {
+                tts.stop();
+                return;
+            }
+            setSpeechRate();
+            setSpeechPitch();
+
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "messageID");
+            setTtsListener();
+        }
+    }
+
+    private void setTtsListener() {
+        int listenerResult =
+                tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                    @Override
+                    public void onDone(String utteranceId) {
+                        Log.d("setTtsListener", "progress on Done " + utteranceId);
+                    }
+
+                    @Override
+                    public void onError(String utteranceId) {
+                        Log.d("setTtsListener", "progress on Error " + utteranceId);
+                    }
+
+                    @Override
+                    public void onStart(String utteranceId) {
+                        Log.d("setTtsListener", "progress on Start " + utteranceId);
+                    }
+                });
+
+        if (listenerResult != TextToSpeech.SUCCESS) {
+            Log.e("setTtsListener", "failed to add utterance progress listener");
+        }
+    }
+
+    private void setSpeechPitch() {
+        if (null != tts) {
+            tts.setPitch((float) 1.0);
+        }
+    }
+
+    private void setSpeechRate() {
+        if (null != tts) {
+            tts.setSpeechRate((float) 1.0);
+        }
     }
 }
