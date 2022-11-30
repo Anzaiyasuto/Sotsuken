@@ -4,6 +4,7 @@ import static androidx.constraintlayout.helper.widget.MotionEffect.TAG;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.PendingIntent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
@@ -22,16 +23,22 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.Geofence;
+import com.google.android.gms.location.GeofencingClient;
+import com.google.android.gms.location.GeofencingRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.net.PlacesClient;
@@ -68,6 +75,10 @@ import okhttp3.Response;
  * dbサーバに接続して指定した経路の事故データゲット(仮設置)
  * 経路を含む運転区間の最大最小緯度経度を算出(polyline)
  * DirectionJSONファイルから道案内(html_instructions)を抽出＆文字コード整形＆音声案内登録
+ *
+ * 2022年11月29日やること
+ * ジオフェンスの設定
+ * DirectionJSONファイルの解析とジオフェンスによる音声案内登録
  */
 public class MapsActivity extends FragmentActivity
         implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener,
@@ -77,6 +88,7 @@ public class MapsActivity extends FragmentActivity
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
     private static final int DEFAULT_ZOOM = 15;
+    private float GEOFENCE_RADIUS = 200;
     private final LatLng defaultLocation = new LatLng(35.6809591, 139.7673068);
     Handler mMainHandler = new Handler(Looper.getMainLooper());
     private GoogleMap mMap;
@@ -87,6 +99,9 @@ public class MapsActivity extends FragmentActivity
     private FusedLocationProviderClient fusedLocationProviderClient;
     private Location lastKnownLocation;
     private TextToSpeech tts;
+    GeofencingClient geofencingClient;
+    private GeofenceHelper geofenceHelper;
+    private String GEOFENCE_ID = "SOME_GEOFENCE_ID";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,7 +122,9 @@ public class MapsActivity extends FragmentActivity
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-
+        //Geofence setting
+        geofencingClient = LocationServices.getGeofencingClient(this);
+        geofenceHelper = new GeofenceHelper(this);
     }
 
     /**
@@ -373,7 +390,57 @@ public class MapsActivity extends FragmentActivity
 
         //20221102
         //最終的に冗長
+        handleMapLongClick(latLng);
 
+    }
+
+    private void handleMapLongClick(LatLng latLng) {
+        addCircle(latLng, GEOFENCE_RADIUS);
+        addGeofence(latLng, GEOFENCE_RADIUS);
+
+    }
+
+    private void addGeofence(LatLng latLng, float radius) {
+        Geofence geofence = geofenceHelper.getGeofence(GEOFENCE_ID, latLng, radius, Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT);
+        GeofencingRequest geofencingRequest = geofenceHelper.getGeofencingRequest(geofence);
+        PendingIntent pendingIntent = null;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            pendingIntent = geofenceHelper.getPendingIntent();
+        }
+
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return;
+        }
+        geofencingClient.addGeofences(geofencingRequest, pendingIntent).addOnSuccessListener(new OnSuccessListener<Void>() {
+            @Override
+            public void onSuccess(Void unused) {
+                Log.d(TAG, "onSuccess: Added...");
+            }
+        }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception e) {
+                String errorMessage = geofenceHelper.getErrorString(e);
+                Log.d(TAG, "onFailure: " + e);
+            }
+        });
+    }
+
+    private void addCircle(LatLng latLng, float radius) {
+        CircleOptions circleOptions = new CircleOptions();
+        circleOptions.center(latLng);
+        circleOptions.radius(radius);
+        circleOptions.strokeColor(Color.argb(255, 255, 0, 0));
+        circleOptions.fillColor(Color.argb(64, 255, 0, 0));
+        circleOptions.strokeWidth(4);
+        mMap.addCircle(circleOptions);
     }
 
     @Override
