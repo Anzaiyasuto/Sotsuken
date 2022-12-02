@@ -89,9 +89,10 @@ public class MapsActivity extends FragmentActivity
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
     private static final int DEFAULT_ZOOM = 15;
-    private float GEOFENCE_RADIUS = 200;
     private final LatLng defaultLocation = new LatLng(35.6809591, 139.7673068);
     Handler mMainHandler = new Handler(Looper.getMainLooper());
+    GeofencingClient geofencingClient;
+    private final float GEOFENCE_RADIUS = 100;
     private GoogleMap mMap;
     private Marker marker;
     private boolean locationPermissionGranted;
@@ -100,9 +101,8 @@ public class MapsActivity extends FragmentActivity
     private FusedLocationProviderClient fusedLocationProviderClient;
     private Location lastKnownLocation;
     private TextToSpeech tts;
-    GeofencingClient geofencingClient;
     private GeofenceHelper geofenceHelper;
-    private String GEOFENCE_ID = "SOME_GEOFENCE_ID";
+    private final String GEOFENCE_ID = "SOME_GEOFENCE_ID";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -279,9 +279,9 @@ public class MapsActivity extends FragmentActivity
                             // Set the map's camera position to the current location of the device.
                             lastKnownLocation = task.getResult();
                             if (lastKnownLocation != null) {
-                                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
-                                        new LatLng(lastKnownLocation.getLatitude(),
-                                                lastKnownLocation.getLongitude()), DEFAULT_ZOOM));
+                                Log.d("getDeviceLocation()", "lastKnownLocation=(" + lastKnownLocation.getLatitude() + ","+ lastKnownLocation.getLongitude() + ")");
+                                //mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lastKnownLocation.getLatitude(),lastKnownLocation.getLongitude()), DEFAULT_ZOOM));
+                                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lastKnownLocation.getLatitude(),lastKnownLocation.getLongitude()), DEFAULT_ZOOM));
                             }
                         } else {
                             Log.d(TAG, "Current location is null. Using defaults.");
@@ -326,7 +326,7 @@ public class MapsActivity extends FragmentActivity
         current = new LatLng(location.getLatitude(), location.getLongitude());
         //mMap.addMarker(new MarkerOptions().position(tokyo).title("Marker in Tokyo"));
         mMap.moveCamera(CameraUpdateFactory.newLatLng(current));
-        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(current, 20.0f));
+        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(current, DEFAULT_ZOOM));
 
         Toast.makeText(this, "Current location:\n" + location, Toast.LENGTH_LONG).show();
     }
@@ -445,11 +445,12 @@ public class MapsActivity extends FragmentActivity
     @Override
     public boolean onMarkerClick(@NonNull Marker marker) {
         //移動ルート取得
+
         LatLng latLng = marker.getPosition();
         Log.d("debug", String.valueOf(marker));
         Log.d("debug", String.valueOf(latLng));
         if (latLng == null) return false;
-
+        getDeviceLocation();
         //URL get(direction api)
         String url = getURL(latLng);
 
@@ -781,7 +782,8 @@ public class MapsActivity extends FragmentActivity
                             Log.i("maneuver", maneuver + ":distance=" + distance_txt + ":duration:" + duration_txt);
                             //addCircle();
                             Log.i("separete", "--------------------------------------");
-                        } else  {
+                        } else {
+                            route_maneuver.add("go straight");
                             Log.i("maneuver", "go straight" + distance_txt);
                         }
                         //Log.i("alpha", alpha);
@@ -791,12 +793,11 @@ public class MapsActivity extends FragmentActivity
                 }
             }
 
-        } catch (
-                JSONException e) {
+        } catch (JSONException e) {
             e.printStackTrace();
         }
-        Log.d("lat", String.valueOf(route_latitude));
-        Log.d("lon", String.valueOf(route_longitude));
+        Log.d("drawRoute()", "lat=" + route_latitude);
+        Log.d("drawRoute()", "lon=" + route_longitude);
         Log.d("distance", String.valueOf(route_distance));
         Log.d("maneuver", String.valueOf(route_maneuver));
 
@@ -828,7 +829,7 @@ public class MapsActivity extends FragmentActivity
                     addCircle(latLng, GEOFENCE_RADIUS);
                     addGeofence(latLng, GEOFENCE_RADIUS);
                     if (i >= 0) {
-                        marker = mMap.addMarker(new MarkerOptions().position(latLng).title("announce:" + "straight" +" distance:" + route_distance.get(i)));
+                        marker = mMap.addMarker(new MarkerOptions().position(latLng).title("announce:" + "straight" + " distance:" + route_distance.get(i)));
                     } else {
                         //marker = mMap.addMarker(new MarkerOptions().position(latLng).title("announce:" + route_maneuver.get(i-1) +" distance:" + route_distance.get(i)));
 
@@ -922,7 +923,7 @@ public class MapsActivity extends FragmentActivity
                 + output + "?" + parameters + "&region=ja" + "&key=" + getString(R.string.google_maps_key);
         //debug
         //str_url = "https://maps.googleapis.com/maps/api/directions/json?origin=35.94930742542948,%20139.65396618863628&destination=35.93944021019093,%20139.63276601021752&mode=driving&key=AIzaSyCARFC52yInNoO0ff0NMLFTcvU7B4AtMd8";
-        Log.i("INFORMATION", str_url);
+        Log.i("getURL()", "str_url = " + str_url);
         return str_url;
     }
 
