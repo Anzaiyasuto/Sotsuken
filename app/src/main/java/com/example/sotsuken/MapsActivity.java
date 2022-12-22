@@ -5,9 +5,12 @@ import static androidx.constraintlayout.helper.widget.MotionEffect.TAG;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
@@ -15,6 +18,7 @@ import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.util.Log;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -83,7 +87,7 @@ import okhttp3.Response;
  */
 public class MapsActivity extends FragmentActivity
         implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener,
-        GoogleMap.OnMyLocationClickListener,
+        GoogleMap.OnMyLocationClickListener, LocationListener,
         ActivityCompat.OnRequestPermissionsResultCallback, GoogleMap.OnMapLongClickListener, GoogleMap.OnMarkerClickListener, TextToSpeech.OnInitListener {
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
@@ -103,6 +107,9 @@ public class MapsActivity extends FragmentActivity
     private TextToSpeech tts;
     private GeofenceHelper geofenceHelper;
     private final String GEOFENCE_ID = "SOME_GEOFENCE_ID";
+    private LocationManager locationManager;
+    private TextView textView;
+    private float speed = 0f;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -126,6 +133,9 @@ public class MapsActivity extends FragmentActivity
         //Geofence setting
         geofencingClient = LocationServices.getGeofencingClient(this);
         geofenceHelper = new GeofenceHelper(this);
+
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        textView = (TextView) findViewById(R.id.speed_text);
     }
 
     /**
@@ -638,16 +648,29 @@ public class MapsActivity extends FragmentActivity
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 final String jsonStr = response.body().string();
+                //JSONObject jsonObject = new JSONObject(jsonStr);
+                //JSONArray alpha = response.body().
                 String status = null, message = null;
-                Log.d("Hoge", "jsonStr=" + jsonStr);
-
+                //Double latitude[]=null, longitude[]=null;
+                ArrayList<Double> latitude = new ArrayList<Double>();
+                ArrayList<Double> longitude = new ArrayList<Double>();
+                Log.d("getTrafficData()", "jsonStr=" + jsonStr);
+                //Log.d("jsonStr type=", String.valueOf(jsonStr instanceof String));
                 try {
                     JSONArray jsonArray = new JSONArray(jsonStr);
+                    //JSONObject jsonObject = new JSONObject(jsonStr);
                     for (int i = 0; i < jsonArray.length(); i++) {
                         JSONObject jsonObject = jsonArray.getJSONObject(i);
                         //status = jsonObject.getString("id");
                         //message = jsonObject.getString("name");
-                        comment[0] = jsonObject.getString("comment");
+                        comment[0] = jsonObject.getString("id");
+                        latitude.add(jsonObject.getDouble("latitude"));
+                        longitude.add(jsonObject.getDouble("longitude"));
+                        //latitude = jsonObject.getDouble("latitude");
+                        //longitude = jsonObject.getDouble("longitude");
+                        //LatLng traffic = new LatLng(latitude, longitude);
+                        //marker = mMap.addMarker(new MarkerOptions().position(traffic).title("(" + traffic.latitude + "," + traffic.longitude + ")"));
+                        //Log.d("getTrafficData()", jsonObject.getString("latitude") + "," + jsonObject.getString("longitude"));
                     }
 
 
@@ -659,13 +682,18 @@ public class MapsActivity extends FragmentActivity
                         @Override
                         public void run() {
                             //txt01.setText(finalComment);
-                            Toast.makeText(getApplicationContext(), finalComment, Toast.LENGTH_LONG);
+                            //Toast.makeText(getApplicationContext(), finalComment, Toast.LENGTH_LONG);
+                            for (int i = 0; i < latitude.size(); i++) {
+                                LatLng traffic = new LatLng(latitude.get(i), longitude.get(i));
+                                marker = mMap.addMarker(new MarkerOptions().position(traffic).title("(" + traffic.latitude + "," + traffic.longitude + ")"));
+
+                            }
                         }
                     });
 
 
                 } catch (Exception e) {
-                    Log.e("Hoge", e.getMessage());
+                    Log.e("traffic", e.getMessage());
                 }
             }
         });
@@ -687,7 +715,6 @@ public class MapsActivity extends FragmentActivity
         Log.i("INFORMATION", str_url);
         return str_url;
          */
-
         float minX = (float) lastKnownLocation.getLatitude();
         float minY = (float) lastKnownLocation.getLongitude();
         float maxX = (float) latLng.latitude;
@@ -710,6 +737,7 @@ public class MapsActivity extends FragmentActivity
         String parameter = "minX=" + minX + "&minY=" + minY + "&maxX=" + maxX + "&maxY=" + maxY;
         str_url = str_url + parameter;
         return str_url;
+        //return "http://al18011.php.xdomain.jp/webapi2.php?";
     }
 
     private void drawRoute(String data) {
@@ -942,5 +970,55 @@ public class MapsActivity extends FragmentActivity
         if (null != tts) {
             tts.shutdown();
         }
+    }
+
+    @Override
+    public void onLocationChanged(@NonNull Location location) {
+        if(location.hasSpeed()) {
+            //速度が出ている時（km/hに変換して変数speedへ）
+            speed = location.getSpeed() * 3.6f;
+        } else {
+            //速度が出ていない時
+            speed = 0;
+        }
+        //速度を表示する
+        textView.setText(speed + " km/h");
+
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        locationManager.removeUpdates(this);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        //GPS（位置情報）の取得が許可があるのかをチェック
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+            //GPSの使用が許可されていなければパーミッションを要求し、その後再度チェックが行われる
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+
+            return;
+        }
+        //ロケーションマネージャーにGPS（位置情報）のリクエストを開始する
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+    }
+
+    @Override
+    public void onProviderEnabled(@NonNull String provider) {
+        LocationListener.super.onProviderEnabled(provider);
+    }
+
+    @Override
+    public void onProviderDisabled(@NonNull String provider) {
+        LocationListener.super.onProviderDisabled(provider);
+    }
+
+    @Override
+    public void onStatusChanged(String provider, int status, Bundle extras) {
+        LocationListener.super.onStatusChanged(provider, status, extras);
     }
 }
