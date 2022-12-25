@@ -35,6 +35,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
@@ -92,6 +93,7 @@ public class MapsActivity extends FragmentActivity
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
+    private static final int BACKGROUND_LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final int DEFAULT_ZOOM = 15;
     private final LatLng defaultLocation = new LatLng(35.6809591, 139.7673068);
     Handler mMainHandler = new Handler(Looper.getMainLooper());
@@ -100,6 +102,7 @@ public class MapsActivity extends FragmentActivity
     private GoogleMap mMap;
     private Marker marker;
     private boolean locationPermissionGranted;
+    private boolean backgroundLocationPermissionGranted;
     private LatLng current;
     private Location myLocation;
     private FusedLocationProviderClient fusedLocationProviderClient;
@@ -214,11 +217,18 @@ public class MapsActivity extends FragmentActivity
                 android.Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
             locationPermissionGranted = true;
-            Log.d("debug", "locationPermissionGranted = true");
+            Log.d("getLocationPermission()", "locationPermissionGranted = true");
         } else {
             ActivityCompat.requestPermissions(this,
                     new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION},
                     PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
+        }
+
+        if(ContextCompat.checkSelfPermission(this.getApplicationContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            backgroundLocationPermissionGranted = true;
+            Log.d("getLocationPermission()", "backgroundLocationPermissionGranted = true");
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},BACKGROUND_LOCATION_PERMISSION_REQUEST_CODE);
         }
     }
 
@@ -474,9 +484,12 @@ public class MapsActivity extends FragmentActivity
                 Log.i("onMarkerClick", "url = " + url);
                 drawRoute(routeData);
                 //エリア再定義
-                drawSquare(routeData);
-                Log.i("onMarkerClick", "apiUrl = " + apiUrl);
-                String feedback = getTrafficData(apiUrl);
+                SquareLatlng squareLatlng = drawSquare_1225(routeData);
+
+                String apiUrl_1225;
+                apiUrl_1225 = getAPIUrl_1225(squareLatlng.minX, squareLatlng.minY, squareLatlng.maxX, squareLatlng.maxY);
+                Log.i("onMarkerClick", "apiUrl = " + apiUrl_1225);
+                String feedback = getTrafficData(apiUrl_1225);
                 //Log.i("debug", feedback);
                 //Toast.makeText(this, "aaa", Toast.LENGTH_LONG).show();
             }
@@ -540,6 +553,95 @@ public class MapsActivity extends FragmentActivity
         }
     }
 
+    private class SquareLatlng {
+        Double minX,minY,maxX,maxY;
+
+        public SquareLatlng(Double minX, Double minY, Double maxX, Double maxY) {
+            this.minX = minX;
+            this.minY = minY;
+            this.maxX = maxX;
+            this.maxY = maxY;
+        }
+    }
+
+    private SquareLatlng drawSquare_1225(String data) {
+        if (data == null) {
+            Log.w("drawSquare_1225()", "Can not draw route because of no data!!");
+            return null;
+        }
+        Double minX1 = null, minY1=null, maxX1=null, maxY1=null;
+
+        try {
+            JSONObject jsonObject = new JSONObject(data);
+            JSONArray jsonArray = jsonObject.getJSONArray("routes");
+            //JSONObject bounds = jsonObject.getJSONObject("bounds");
+            JSONObject jsonObject1 = ((JSONObject)jsonArray.get(0));
+            JSONObject jsonObject2 = jsonObject1.getJSONObject("bounds");
+            JSONObject northeast = jsonObject2.getJSONObject("northeast");
+            JSONObject southwest = jsonObject2.getJSONObject("southwest");
+            maxX1 = northeast.getDouble("lat");
+            maxY1 = northeast.getDouble("lng");
+            minX1 = southwest.getDouble("lat");
+            minY1 = southwest.getDouble("lng");
+            Log.i("drawSquare_1225()", String.valueOf(northeast));
+            Log.i("drawSquare_1225()", String.valueOf(southwest));
+            /*
+            for (int i = 0; i < jsonArray.length(); i++) {
+                JSONArray legsArray = ((JSONObject) jsonArray.get(i)).getJSONArray("bounds");
+                //boundsArray = ((JSONObject) jsonArray.get(i)).getJSONArray("bounds");
+
+            }
+             */
+            //Log.i("drawSquare_1225()", String.valueOf(jsonArray));
+        } catch (JSONException e) {
+            Log.e("drawSquare_1225()", String.valueOf(e));
+            e.printStackTrace();
+        }
+
+        Double finalMinX = minX1;
+        Double finalMinY = minY1;
+        Double finalMaxX = maxX1;
+        Double finalMaxY = maxY1;
+        mMainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+
+                PolylineOptions polylineOptions = null;
+                polylineOptions = new PolylineOptions();
+                Double minX = null, maxX = null, minY = null, maxY = null;
+
+                //
+                //Log.i("route_latitude =", String.valueOf(route_latitude));
+                //Log.i("route_longitude =", String.valueOf(route_longitude));
+
+                //2点間の長方形を作成
+                // ラインオプション設定
+                polylineOptions.width(10);
+                polylineOptions.color(Color.BLACK);
+                // ラインを引く
+                //mMap.addPolyline(null);
+
+                //minX = getListOfMin(route_latitude, lastKnownLocation.getLatitude());
+                //maxX = getListOfMax(route_latitude, lastKnownLocation.getLatitude());
+                //minY = getListOfMin(route_longitude, lastKnownLocation.getLongitude());
+                //maxY = getListOfMax(route_longitude, lastKnownLocation.getLongitude());
+                minX = finalMinX;
+                minY = finalMinY;
+                maxX = finalMaxX;
+                maxY = finalMaxY;
+                polylineOptions.add(new LatLng(minX, minY))
+                        .add(new LatLng(maxX, minY))
+                        .add(new LatLng(maxX, maxY))
+                        .add(new LatLng(minX, maxY))
+                        .add(new LatLng(minX, minY));
+
+                mMap.addPolyline(polylineOptions);
+            }
+        });
+        SquareLatlng squareLatlng = new SquareLatlng(minX1, minY1, maxX1, maxY1);
+        return squareLatlng;
+    }
+
     private void drawSquare(String data) {
         if (data == null) {
             Log.w("SampleMap", "Can not draw route because of no data!!");
@@ -549,6 +651,7 @@ public class MapsActivity extends FragmentActivity
         JSONArray jsonArray = new JSONArray();
         JSONArray legsArray = new JSONArray();
         JSONArray stepArray = new JSONArray();
+        JSONArray boundsArray = new JSONArray();
         //ArrayList<ArrayList<LatLng>> list = new ArrayList<>();
         ArrayList<Double> route_latitude = new ArrayList<>();
         ArrayList<Double> route_longitude = new ArrayList<>();
@@ -559,6 +662,7 @@ public class MapsActivity extends FragmentActivity
             jsonArray = jsonObject.getJSONArray("routes");
             for (int i = 0; i < jsonArray.length(); i++) {
                 legsArray = ((JSONObject) jsonArray.get(i)).getJSONArray("legs");
+                boundsArray = ((JSONObject) jsonArray.get(i)).getJSONArray("bounds");
             }
             for (int i = 0; i < legsArray.length(); i++) {
                 stepArray = ((JSONObject) legsArray.get(i)).getJSONArray("steps");
@@ -642,7 +746,7 @@ public class MapsActivity extends FragmentActivity
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e("Hoge", e.getMessage());
+                Log.e("getTrafficData()", e.getMessage());
             }
 
             @Override
@@ -683,9 +787,19 @@ public class MapsActivity extends FragmentActivity
                         public void run() {
                             //txt01.setText(finalComment);
                             //Toast.makeText(getApplicationContext(), finalComment, Toast.LENGTH_LONG);
+                            Double world_lat, world_lng, japan_lat, japan_lng;
+
                             for (int i = 0; i < latitude.size(); i++) {
-                                LatLng traffic = new LatLng(latitude.get(i), longitude.get(i));
-                                marker = mMap.addMarker(new MarkerOptions().position(traffic).title("(" + traffic.latitude + "," + traffic.longitude + ")"));
+                                world_lat = latitude.get(i);
+                                world_lng = longitude.get(i);
+                                japan_lat = world_lat + (world_lat*0.00010696) - (world_lng*0.000017467) - 0.0046020;
+                                japan_lng = world_lng + (world_lat*0.000046047) + (world_lng*0.000083049) - 0.010041;
+                                LatLng traffic = new LatLng(japan_lat, japan_lng);
+                                marker = mMap.addMarker(new MarkerOptions()
+                                        .position(traffic)
+                                        .title("(" + japan_lat + "," + japan_lng + ")")
+                                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+                                );
 
                             }
                         }
@@ -700,7 +814,14 @@ public class MapsActivity extends FragmentActivity
         return comment[0];
     }
 
+    private String getAPIUrl_1225(Double minX, Double minY, Double maxX, Double maxY) {
 
+        String str_url = "http://al18011.php.xdomain.jp/webapi2.php?";
+        String parameter = "minX=" + minX + "&minY=" + minY + "&maxX=" + maxX + "&maxY=" + maxY;
+        str_url = str_url + parameter;
+        return str_url;
+        //return null;
+    }
     private String getAPIUrl(LatLng latLng) {
         //URLの設定
         //myLocationがヌルぽしがち
