@@ -5,4 +5,5 @@
     <string name="permission_required_toast">permission</string>
     <string name="permission_rationale_location">alpha</string>
     <string name="location_permission_denied">beta</string>
+    <string name="map_not_ready">map_not_ready</string>
 </resources>

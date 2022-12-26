@@ -18,6 +18,8 @@ import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.util.Log;
+import android.view.View;
+import android.widget.CheckBox;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -33,8 +35,10 @@ import com.google.android.gms.location.GeofencingRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.GoogleMapOptions;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.UiSettings;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
@@ -113,6 +117,9 @@ public class MapsActivity extends FragmentActivity
     private LocationManager locationManager;
     private TextView textView;
     private float speed = 0f;
+    private String marker_id;
+    private UiSettings mUiSettings;
+    private GoogleMapOptions googleMapOptions;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -154,6 +161,7 @@ public class MapsActivity extends FragmentActivity
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
+        mUiSettings = mMap.getUiSettings();
 
         //仮の中心座標
         //アプリ起動時に現在地があればそれでよし
@@ -164,12 +172,14 @@ public class MapsActivity extends FragmentActivity
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(tokyo, 14.0f));
         */
         mMap.setMyLocationEnabled(true);
+        mMap.getUiSettings().setCompassEnabled(true);
         //mMap.getUiSettings().setMyLocationButtonEnabled(true);
         updateLocationUI();//こいつが現在地ボタンに影響している
         getDeviceLocation();
         //現在地設定
         mMap.setOnMyLocationButtonClickListener(this);
         mMap.setOnMyLocationClickListener(this);
+
 
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -207,6 +217,28 @@ public class MapsActivity extends FragmentActivity
 
     }
 
+    public void setCompassEnabled(View v) {
+        if (!checkReady()) {
+            return;
+        }
+        // Enables/disables the compass (icon in the top-left for LTR locale or top-right for RTL
+        // locale that indicates the orientation of the map).
+        mUiSettings.setCompassEnabled(((CheckBox) v).isChecked());
+    }
+    private boolean checkReady() {
+        if (mMap == null) {
+            Toast.makeText(this, R.string.map_not_ready, Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        return true;
+    }
+    /**
+     * Returns whether the checkbox with the given id is checked.
+     */
+    private boolean isChecked(int id) {
+        return ((CheckBox) findViewById(id)).isChecked();
+    }
+
     private void getLocationPermission() {
         /*
          * Request location permission, so that we can get the location of the
@@ -242,6 +274,7 @@ public class MapsActivity extends FragmentActivity
                 Log.d("debug", "updateLocationUI() try->if->true");
                 mMap.setMyLocationEnabled(true);
                 mMap.getUiSettings().setMyLocationButtonEnabled(true);
+
             } else {
                 Log.d("debug", "updateLocationUI() try->else->false");
                 mMap.setMyLocationEnabled(false);
@@ -397,7 +430,7 @@ public class MapsActivity extends FragmentActivity
 
     @Override
     public void onMapLongClick(@NonNull LatLng latLng) {
-        Log.d("debug", String.valueOf(current));
+        Log.d("onMapLongClick()", String.valueOf(current));
         if (marker != null) {
             marker.remove();
             mMap.clear();
@@ -412,7 +445,8 @@ public class MapsActivity extends FragmentActivity
         //20221102
         //最終的に冗長
         //handleMapLongClick(latLng);
-
+        Log.d("onMapLongClick()", marker.getId());
+        marker_id = marker.getId();
     }
 
     private void handleMapLongClick(LatLng latLng) {
@@ -465,6 +499,10 @@ public class MapsActivity extends FragmentActivity
     @Override
     public boolean onMarkerClick(@NonNull Marker marker) {
         //移動ルート取得
+        Log.d("onMarkerClick()", marker.getId());
+        Log.d("", marker_id);
+
+        if(!marker_id.equals(marker.getId())) return false;
 
         LatLng latLng = marker.getPosition();
         Log.d("debug", String.valueOf(marker));
@@ -792,14 +830,18 @@ public class MapsActivity extends FragmentActivity
                             for (int i = 0; i < latitude.size(); i++) {
                                 world_lat = latitude.get(i);
                                 world_lng = longitude.get(i);
-                                japan_lat = world_lat + (world_lat*0.00010696) - (world_lng*0.000017467) - 0.0046020;
-                                japan_lng = world_lng + (world_lat*0.000046047) + (world_lng*0.000083049) - 0.010041;
-                                LatLng traffic = new LatLng(japan_lat, japan_lng);
+                                //japan_lat = world_lat + (world_lat*0.00010696) - (world_lng*0.000017467) - 0.0046020;
+                                //japan_lng = world_lng + (world_lat*0.000046047) + (world_lng*0.000083049) - 0.010041;
+                                //LatLng traffic = new LatLng(japan_lat, japan_lng);
+                                LatLng traffic = new LatLng(world_lat, world_lng);
                                 marker = mMap.addMarker(new MarkerOptions()
                                         .position(traffic)
-                                        .title("(" + japan_lat + "," + japan_lng + ")")
+                                        .title("(" + world_lat + "," + world_lng + ")")
                                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+
                                 );
+                                assert marker != null;
+                                Log.d("getTrafficData()", marker.getId());
 
                             }
                         }
@@ -978,7 +1020,7 @@ public class MapsActivity extends FragmentActivity
                     addCircle(latLng, GEOFENCE_RADIUS);
                     addGeofence(latLng, GEOFENCE_RADIUS);
                     if (i >= 0) {
-                        marker = mMap.addMarker(new MarkerOptions().position(latLng).title("announce:" + "straight" + " distance:" + route_distance.get(i)));
+                        marker = mMap.addMarker(new MarkerOptions().position(latLng).title("announce:" + route_maneuver.get(i) + " distance:" + route_distance.get(i)));
                     } else {
                         //marker = mMap.addMarker(new MarkerOptions().position(latLng).title("announce:" + route_maneuver.get(i-1) +" distance:" + route_distance.get(i)));
 
