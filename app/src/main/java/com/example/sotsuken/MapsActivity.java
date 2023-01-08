@@ -63,7 +63,9 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Queue;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -89,6 +91,9 @@ import okhttp3.Response;
  * ジオフェンスの設定
  * 音声案内登録
  * DirectionJSONファイルの解析とジオフェンスによる音声案内登録
+ *
+ * 2023/1/8
+ * 現在地と次の経路までの距離を表す
  */
 public class MapsActivity extends FragmentActivity
         implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener,
@@ -99,6 +104,7 @@ public class MapsActivity extends FragmentActivity
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
     private static final int BACKGROUND_LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final int DEFAULT_ZOOM = 15;
+    private static final int QUEUE_SIZE = 5;
     private final LatLng defaultLocation = new LatLng(35.6809591, 139.7673068);
     Handler mMainHandler = new Handler(Looper.getMainLooper());
     GeofencingClient geofencingClient;
@@ -120,6 +126,7 @@ public class MapsActivity extends FragmentActivity
     private String marker_id;
     private UiSettings mUiSettings;
     private GoogleMapOptions googleMapOptions;
+    private Queue<Float> floatQueue;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -146,6 +153,12 @@ public class MapsActivity extends FragmentActivity
 
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         textView = (TextView) findViewById(R.id.speed_text);
+
+        //harmonic mean speed
+        floatQueue = new ArrayDeque<Float>();
+        for (int i = 0; i < QUEUE_SIZE; i++) {
+            floatQueue.add((float)0);
+        }
     }
 
     /**
@@ -1144,8 +1157,17 @@ public class MapsActivity extends FragmentActivity
             //速度が出ていない時
             speed = 0;
         }
+        floatQueue.remove();
+        floatQueue.add(speed);
+        float harmonic_mean_speed = 0;
+        for (Float n : floatQueue) {
+            if(n > 0) {
+                harmonic_mean_speed += (1/n);
+            }
+        }
+        harmonic_mean_speed = QUEUE_SIZE/harmonic_mean_speed;
         //速度を表示する
-        textView.setText(speed + " km/h");
+        textView.setText(harmonic_mean_speed + " km/h");
 
     }
 
