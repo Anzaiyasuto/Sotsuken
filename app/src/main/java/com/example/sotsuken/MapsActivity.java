@@ -108,7 +108,12 @@ public class MapsActivity extends FragmentActivity
     private final LatLng defaultLocation = new LatLng(35.6809591, 139.7673068);
     Handler mMainHandler = new Handler(Looper.getMainLooper());
     GeofencingClient geofencingClient;
-    private final float GEOFENCE_RADIUS = 100;
+    private final float GEOFENCE_RADIUS = 50;
+    boolean flagIntersection = false;
+    boolean flag1000m = false;
+    boolean flag500m = false;
+    boolean flag300m = false;
+    boolean flag100m = false;
     private GoogleMap mMap;
     private Marker marker;
     private boolean locationPermissionGranted;
@@ -122,11 +127,23 @@ public class MapsActivity extends FragmentActivity
     private final String GEOFENCE_ID = "SOME_GEOFENCE_ID";
     private LocationManager locationManager;
     private TextView textView;
+    private TextView distance_text;
     private float speed = 0f;
     private String marker_id;
     private UiSettings mUiSettings;
     private GoogleMapOptions googleMapOptions;
     private Queue<Float> floatQueue;
+    private Queue<Double> navigate_latitude;
+    private Queue<Double> navigate_longitude;
+    private Queue<Double> navigate_distance;
+    private Queue<String> navigate_maneuver;
+    private Double next_lat;
+    private Double next_lng;
+    private int target_distance = 9999;
+    ArrayList<Double> route_latitude = new ArrayList<>();
+    ArrayList<Double> route_longitude = new ArrayList<>();
+    ArrayList<Double> route_distance = new ArrayList<>();
+    ArrayList<String> route_maneuver = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -153,11 +170,15 @@ public class MapsActivity extends FragmentActivity
 
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         textView = (TextView) findViewById(R.id.speed_text);
-
+        distance_text = (TextView) findViewById(R.id.distance_text);
         //harmonic mean speed
         floatQueue = new ArrayDeque<Float>();
+        navigate_maneuver = new ArrayDeque<String>();
+        navigate_latitude = new ArrayDeque<Double>();
+        navigate_longitude = new ArrayDeque<Double>();
+        navigate_distance = new ArrayDeque<Double>();
         for (int i = 0; i < QUEUE_SIZE; i++) {
-            floatQueue.add((float)0);
+            floatQueue.add((float) 0);
         }
     }
 
@@ -192,7 +213,6 @@ public class MapsActivity extends FragmentActivity
         //現在地設定
         mMap.setOnMyLocationButtonClickListener(this);
         mMap.setOnMyLocationClickListener(this);
-
 
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -238,6 +258,7 @@ public class MapsActivity extends FragmentActivity
         // locale that indicates the orientation of the map).
         mUiSettings.setCompassEnabled(((CheckBox) v).isChecked());
     }
+
     private boolean checkReady() {
         if (mMap == null) {
             Toast.makeText(this, R.string.map_not_ready, Toast.LENGTH_SHORT).show();
@@ -245,6 +266,7 @@ public class MapsActivity extends FragmentActivity
         }
         return true;
     }
+
     /**
      * Returns whether the checkbox with the given id is checked.
      */
@@ -269,11 +291,11 @@ public class MapsActivity extends FragmentActivity
                     PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
         }
 
-        if(ContextCompat.checkSelfPermission(this.getApplicationContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(this.getApplicationContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             backgroundLocationPermissionGranted = true;
             Log.d("getLocationPermission()", "backgroundLocationPermissionGranted = true");
         } else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},BACKGROUND_LOCATION_PERMISSION_REQUEST_CODE);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION}, BACKGROUND_LOCATION_PERMISSION_REQUEST_CODE);
         }
     }
 
@@ -345,9 +367,9 @@ public class MapsActivity extends FragmentActivity
                             // Set the map's camera position to the current location of the device.
                             lastKnownLocation = task.getResult();
                             if (lastKnownLocation != null) {
-                                Log.d("getDeviceLocation()", "lastKnownLocation=(" + lastKnownLocation.getLatitude() + ","+ lastKnownLocation.getLongitude() + ")");
+                                Log.d("getDeviceLocation()", "lastKnownLocation=(" + lastKnownLocation.getLatitude() + "," + lastKnownLocation.getLongitude() + ")");
                                 //mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lastKnownLocation.getLatitude(),lastKnownLocation.getLongitude()), DEFAULT_ZOOM));
-                                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lastKnownLocation.getLatitude(),lastKnownLocation.getLongitude()), DEFAULT_ZOOM));
+                                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude()), DEFAULT_ZOOM));
                             }
                         } else {
                             Log.d(TAG, "Current location is null. Using defaults.");
@@ -447,7 +469,15 @@ public class MapsActivity extends FragmentActivity
         if (marker != null) {
             marker.remove();
             mMap.clear();
-            geofencingClient.removeGeofences(geofenceHelper.getPendingIntent());
+            route_latitude.clear();
+            route_longitude.clear();
+            route_distance.clear();
+            route_maneuver.clear();
+            navigate_distance.clear();
+            navigate_longitude.clear();
+            navigate_latitude.clear();
+            navigate_maneuver.clear();
+            //geofencingClient.removeGeofences(geofenceHelper.getPendingIntent());
         }
         marker = mMap.addMarker(new MarkerOptions().position(latLng).title("(" + latLng.latitude + "," + latLng.longitude + ")"));
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 14));
@@ -460,11 +490,12 @@ public class MapsActivity extends FragmentActivity
         //handleMapLongClick(latLng);
         Log.d("onMapLongClick()", marker.getId());
         marker_id = marker.getId();
+
     }
 
     private void handleMapLongClick(LatLng latLng) {
-        addCircle(latLng, GEOFENCE_RADIUS);
-        addGeofence(latLng, GEOFENCE_RADIUS);
+        //addCircle(latLng, GEOFENCE_RADIUS);
+        //addGeofence(latLng, GEOFENCE_RADIUS);
 
     }
 
@@ -515,7 +546,7 @@ public class MapsActivity extends FragmentActivity
         Log.d("onMarkerClick()", marker.getId());
         Log.d("", marker_id);
 
-        if(!marker_id.equals(marker.getId())) return false;
+        if (!marker_id.equals(marker.getId())) return false;
 
         LatLng latLng = marker.getPosition();
         Log.d("debug", String.valueOf(marker));
@@ -543,13 +574,14 @@ public class MapsActivity extends FragmentActivity
                 String feedback = getTrafficData(apiUrl_1225);
                 //Log.i("debug", feedback);
                 //Toast.makeText(this, "aaa", Toast.LENGTH_LONG).show();
+
             }
         });
 
         //11.4
         //仮実装
         String text = "600m先,右折してください";
-        speechText(text);
+        //speechText(text);
 
         return false;
     }
@@ -605,7 +637,7 @@ public class MapsActivity extends FragmentActivity
     }
 
     private class SquareLatlng {
-        Double minX,minY,maxX,maxY;
+        Double minX, minY, maxX, maxY;
 
         public SquareLatlng(Double minX, Double minY, Double maxX, Double maxY) {
             this.minX = minX;
@@ -620,13 +652,13 @@ public class MapsActivity extends FragmentActivity
             Log.w("drawSquare_1225()", "Can not draw route because of no data!!");
             return null;
         }
-        Double minX1 = null, minY1=null, maxX1=null, maxY1=null;
+        Double minX1 = null, minY1 = null, maxX1 = null, maxY1 = null;
 
         try {
             JSONObject jsonObject = new JSONObject(data);
             JSONArray jsonArray = jsonObject.getJSONArray("routes");
             //JSONObject bounds = jsonObject.getJSONObject("bounds");
-            JSONObject jsonObject1 = ((JSONObject)jsonArray.get(0));
+            JSONObject jsonObject1 = ((JSONObject) jsonArray.get(0));
             JSONObject jsonObject2 = jsonObject1.getJSONObject("bounds");
             JSONObject northeast = jsonObject2.getJSONObject("northeast");
             JSONObject southwest = jsonObject2.getJSONObject("southwest");
@@ -789,6 +821,14 @@ public class MapsActivity extends FragmentActivity
         });
     }
 
+    /**
+     * 指定領域内の過去の交通事故を地図上に表示する
+     * 赤マーカー:経路上の交差点
+     * 緑マーカー:赤マーカーの半径40m以内の事故データ
+     * 黄マーカー:指定領域内の無視するデータ
+     * @param url xfreeサーバに自作したapiのURL
+     * @return 特に意味なし
+     */
     private String getTrafficData(String url) {
         final String[] comment = {null};
         OkHttpClient client = new OkHttpClient();
@@ -807,8 +847,8 @@ public class MapsActivity extends FragmentActivity
                 //JSONArray alpha = response.body().
                 String status = null, message = null;
                 //Double latitude[]=null, longitude[]=null;
-                ArrayList<Double> latitude = new ArrayList<Double>();
-                ArrayList<Double> longitude = new ArrayList<Double>();
+                ArrayList<Double> latitude_list = new ArrayList<Double>();
+                ArrayList<Double> longitude_list = new ArrayList<Double>();
                 Log.d("getTrafficData()", "jsonStr=" + jsonStr);
                 //Log.d("jsonStr type=", String.valueOf(jsonStr instanceof String));
                 try {
@@ -819,8 +859,8 @@ public class MapsActivity extends FragmentActivity
                         //status = jsonObject.getString("id");
                         //message = jsonObject.getString("name");
                         comment[0] = jsonObject.getString("id");
-                        latitude.add(jsonObject.getDouble("latitude"));
-                        longitude.add(jsonObject.getDouble("longitude"));
+                        latitude_list.add(jsonObject.getDouble("latitude"));
+                        longitude_list.add(jsonObject.getDouble("longitude"));
                         //latitude = jsonObject.getDouble("latitude");
                         //longitude = jsonObject.getDouble("longitude");
                         //LatLng traffic = new LatLng(latitude, longitude);
@@ -840,21 +880,43 @@ public class MapsActivity extends FragmentActivity
                             //Toast.makeText(getApplicationContext(), finalComment, Toast.LENGTH_LONG);
                             Double world_lat, world_lng, japan_lat, japan_lng;
 
-                            for (int i = 0; i < latitude.size(); i++) {
-                                world_lat = latitude.get(i);
-                                world_lng = longitude.get(i);
+                            for (int i = 0; i < latitude_list.size(); i++) {
+                                world_lat = latitude_list.get(i);
+                                world_lng = longitude_list.get(i);
                                 //japan_lat = world_lat + (world_lat*0.00010696) - (world_lng*0.000017467) - 0.0046020;
                                 //japan_lng = world_lng + (world_lat*0.000046047) + (world_lng*0.000083049) - 0.010041;
                                 //LatLng traffic = new LatLng(japan_lat, japan_lng);
                                 LatLng traffic = new LatLng(world_lat, world_lng);
-                                marker = mMap.addMarker(new MarkerOptions()
-                                        .position(traffic)
-                                        .title("(" + world_lat + "," + world_lng + ")")
-                                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+                                boolean setMarker = false;
+                                for (int j = 0; j < route_latitude.size(); j++) {
+                                    //float[] next_distance = getDistance(location.getLatitude(), location.getLongitude(), next_lat, next_lng);
+                                    float[] check_accident_in_intersections = getDistance(route_latitude.get(j), route_longitude.get(j), world_lat, world_lng);
+                                    if (check_accident_in_intersections[0] < 50) {
+                                        marker = mMap.addMarker(new MarkerOptions()
+                                                .position(traffic)
+                                                .title("(" + world_lat + "," + world_lng + ")")
+                                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
 
-                                );
-                                assert marker != null;
-                                Log.d("getTrafficData()", marker.getId());
+                                        );
+                                        assert marker != null;
+                                        Log.d("getTrafficData()", marker.getId());
+                                        setMarker = true;
+                                        break;
+                                    }
+                                }
+                                /*
+                                if (!setMarker) {
+                                    marker = mMap.addMarker(new MarkerOptions()
+                                            .position(traffic)
+                                            .title("(" + world_lat + "," + world_lng + ")")
+                                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW))
+
+                                    );
+                                    assert marker != null;
+                                    Log.d("getTrafficData()", marker.getId());
+                                }
+                                */
+
 
                             }
                         }
@@ -877,6 +939,7 @@ public class MapsActivity extends FragmentActivity
         return str_url;
         //return null;
     }
+
     private String getAPIUrl(LatLng latLng) {
         //URLの設定
         //myLocationがヌルぽしがち
@@ -916,6 +979,7 @@ public class MapsActivity extends FragmentActivity
         //return "http://al18011.php.xdomain.jp/webapi2.php?";
     }
 
+
     private void drawRoute(String data) {
         if (data == null) {
             Log.w("SampleMap", "Can not draw route because of no data!!");
@@ -931,10 +995,8 @@ public class MapsActivity extends FragmentActivity
         String alpha = null;
         JSONObject beta = null;
         String distance = null;
-        ArrayList<Double> route_latitude = new ArrayList<>();
-        ArrayList<Double> route_longitude = new ArrayList<>();
-        ArrayList<Double> route_distance = new ArrayList<>();
-        ArrayList<String> route_maneuver = new ArrayList<>();
+
+
         try {
             JSONObject jsonObject = new JSONObject(data);
             jsonArray = jsonObject.getJSONArray("routes");
@@ -961,10 +1023,15 @@ public class MapsActivity extends FragmentActivity
                         route_longitude.add(stepObject.getJSONObject("end_location").getDouble("lng"));
                         route_distance.add(stepObject.getJSONObject("distance").getDouble("value"));
 
+                        navigate_latitude.add(stepObject.getJSONObject("end_location").getDouble("lat"));
+                        navigate_longitude.add(stepObject.getJSONObject("end_location").getDouble("lng"));
+                        navigate_distance.add(stepObject.getJSONObject("distance").getDouble("value"));
+
                         String maneuver = null, distance_txt = null, duration_txt = null;
                         if (stepIndex > 0) {
                             maneuver = ((JSONObject) stepArray.get(stepIndex)).getString("maneuver");
                             route_maneuver.add(stepObject.getString("maneuver"));
+                            navigate_maneuver.add(stepObject.getString("maneuver"));
                             //distance = String.valueOf(((JSONObject) stepArray.get(stepIndex)).getJSONObject("end_location"));
                             distance_txt = ((JSONObject) ((JSONObject) stepArray.get(stepIndex)).get("distance")).getString("value");
                             duration_txt = ((JSONObject) ((JSONObject) stepArray.get(stepIndex)).get("duration")).getString("value");
@@ -988,6 +1055,7 @@ public class MapsActivity extends FragmentActivity
                             Log.i("separete", "--------------------------------------");
                         } else {
                             route_maneuver.add("go straight");
+                            navigate_maneuver.add("go straight");
                             Log.i("maneuver", "go straight" + distance_txt);
                         }
                         //Log.i("alpha", alpha);
@@ -999,13 +1067,54 @@ public class MapsActivity extends FragmentActivity
 
         } catch (JSONException e) {
             e.printStackTrace();
+            route_maneuver.add("go straight");
+            navigate_maneuver.add("go straight");
+
         }
         Log.d("drawRoute()", "lat=" + route_latitude);
         Log.d("drawRoute()", "lon=" + route_longitude);
         Log.d("distance", String.valueOf(route_distance));
         Log.d("maneuver", String.valueOf(route_maneuver));
+        /*
+        if (Objects.equals(route_maneuver.get(0), "go straight")) {
+            next_lat = route_latitude.get(1);
+            next_lng = route_longitude.get(1);
+            navigate_maneuver.remove();
+            navigate_distance.remove();
+            navigate_longitude.remove();
+            navigate_latitude.remove();
+        } else {
+            next_lat = route_latitude.get(0);
+            next_lng = route_longitude.get(0);
+        }
+         */
 
+        next_lat = route_latitude.get(0);
+        next_lng = route_longitude.get(0);
+
+        Log.d("drawRoute()", "next location:" + next_lat + "," + next_lng);
         JSONArray finalHtmlArray = htmlArray;
+        mMainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                String dis = String.valueOf(shapeDistance(route_distance.get(0)));
+                String navigate = route_maneuver.get(0);
+                switch (navigate) {
+                    case "go straight":
+                        navigate = "直進";
+                        break;
+                    case "turn-right":
+                        navigate = "右方向";
+                        break;
+                    case "turn-left":
+                        navigate = "左方向";
+                        break;
+                }
+
+                speechText("およそ"+ dis + "メートル先" + navigate + "してください");
+
+            }
+        });
         mMainHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -1031,14 +1140,20 @@ public class MapsActivity extends FragmentActivity
                 for (int i = 0; i < route_distance.size(); i++) {
                     LatLng latLng = new LatLng(route_latitude.get(i), route_longitude.get(i));
                     addCircle(latLng, GEOFENCE_RADIUS);
-                    addGeofence(latLng, GEOFENCE_RADIUS);
+                    //addGeofence(latLng, GEOFENCE_RADIUS);
                     if (i >= 0) {
-                        marker = mMap.addMarker(new MarkerOptions().position(latLng).title("announce:" + route_maneuver.get(i) + " distance:" + route_distance.get(i)));
+                        marker = mMap.addMarker(new MarkerOptions()
+                                .position(latLng)
+                                .title("announce:" + route_maneuver.get(i) + " distance:" + route_distance.get(i))
+                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
+
+
                     } else {
                         //marker = mMap.addMarker(new MarkerOptions().position(latLng).title("announce:" + route_maneuver.get(i-1) +" distance:" + route_distance.get(i)));
 
                     }
-
+                    assert marker != null;
+                    Log.d("drawRoute()", marker.getId());
                 }
             }
         });
@@ -1124,7 +1239,7 @@ public class MapsActivity extends FragmentActivity
         String parameters = str_origin + "&" + str_dest + "&" + mode;
         String output = "json";
         String str_url = "https://maps.googleapis.com/maps/api/directions/"
-                + output + "?" + parameters + "&region=ja" + "&key=" + getString(R.string.google_maps_key);
+                + output + "?" + parameters + "&region=ja"  + "&avoid=tolls|highways|ferries"+ "&key=" + getString(R.string.google_maps_key);
         //debug
         //str_url = "https://maps.googleapis.com/maps/api/directions/json?origin=35.94930742542948,%20139.65396618863628&destination=35.93944021019093,%20139.63276601021752&mode=driving&key=AIzaSyCARFC52yInNoO0ff0NMLFTcvU7B4AtMd8";
         Log.i("getURL()", "str_url = " + str_url);
@@ -1148,27 +1263,152 @@ public class MapsActivity extends FragmentActivity
         }
     }
 
+
+    //毎秒の更新処理
+
+    /**
+     * ナビゲーションシステムの根幹
+     * 1:スマホで計測した速度(km/h)
+     * 2:スマホで計測した次の交差点までの距離(m)
+     * 3-1:経路音声案内(交差点内で一回)
+     * 3-2:曲がった直後に次の交差点までの距離 + 注意喚起
+     * 3-3:経路案内(1000m)
+     * 3-4:経路案内(500m)
+     * 3-5:経路案内(300m) + 注意喚起
+     * 3-6:経路案内(100m) + 注意喚起
+     */
     @Override
     public void onLocationChanged(@NonNull Location location) {
-        if(location.hasSpeed()) {
+        //1
+        if (location.hasSpeed()) {
             //速度が出ている時（km/hに変換して変数speedへ）
             speed = location.getSpeed() * 3.6f;
         } else {
             //速度が出ていない時
             speed = 0;
         }
+
         floatQueue.remove();
         floatQueue.add(speed);
+        float reverse_speed = 0;
         float harmonic_mean_speed = 0;
         for (Float n : floatQueue) {
-            if(n > 0) {
-                harmonic_mean_speed += (1/n);
+            if (n >= 1) {
+                reverse_speed += (1 / n);
+            } else {
+                reverse_speed += 1;
             }
         }
-        harmonic_mean_speed = QUEUE_SIZE/harmonic_mean_speed;
+        harmonic_mean_speed = QUEUE_SIZE / reverse_speed;
         //速度を表示する
+        if (harmonic_mean_speed <= 2) {
+            harmonic_mean_speed = 0;
+        }
         textView.setText(harmonic_mean_speed + " km/h");
 
+        //2
+        float[] next_distance = getDistance(location.getLatitude(), location.getLongitude(), next_lat, next_lng);
+        distance_text.setText(next_distance[0] + "m");
+
+        //3-1
+        if (next_distance[0] <= 15 && !flagIntersection && !navigate_maneuver.isEmpty() && !tts.isSpeaking()) {
+            String navigate;
+            //navigate = route_maneuver.get(1);
+            navigate = navigate_maneuver.poll();
+            navigate_latitude.remove();
+            navigate_longitude.remove();
+            navigate_distance.remove();
+            next_lat = navigate_latitude.element();
+            next_lng = navigate_longitude.element();
+            switch (navigate) {
+                case "go straight":
+                    navigate = "直進";
+                    break;
+                case "turn-right":
+                    navigate = "右方向";
+                    break;
+                case "turn-left":
+                    navigate = "左方向";
+                    break;
+            }
+
+            speechText(navigate+"です。");
+            flagIntersection = true;
+        }
+        //3-2 next direction
+        if (next_distance[0] > 20 && flagIntersection && !tts.isSpeaking()) {
+
+            flagIntersection = false;
+            flag1000m = false;
+            flag500m = false;
+            flag300m = false;
+            flag100m = false;
+
+            String mane, dis;
+            mane = navigate_maneuver.element();
+            navigateTemplate(mane, shapeDistance(navigate_distance.element()));
+        }
+        //3-3 reach 1000m
+        if (next_distance[0] < 1000 && !flag1000m && navigate_distance.element()>=1000 && !tts.isSpeaking()) {
+            flag1000m = true;
+            navigateTemplate(navigate_maneuver.element(), 1000);
+        }
+        //3-4 reach 500m
+        if (next_distance[0] < 500 && !flag500m && navigate_distance.element()>=500 && !tts.isSpeaking()) {
+            flag500m = true;
+            navigateTemplate(navigate_maneuver.element(), 500);
+        }
+        //3-5 reach 300m
+        if (next_distance[0] < 300 && !flag300m && navigate_distance.element()>=300 && !tts.isSpeaking()) {
+            flag300m = true;
+            navigateTemplate(navigate_maneuver.element(), 300);
+        }
+
+        if (next_distance[0] < 100 && !flag100m && navigate_distance.element()>=100 && !tts.isSpeaking()) {
+            flag100m = true;
+            navigateTemplate(navigate_maneuver.element(), 100);
+        }
+
+    }
+
+    private void navigateTemplate(String element, int i) {
+        switch (element) {
+            case "go straight":
+                element = "直進";
+                break;
+            case "turn-right":
+                element = "右方向";
+                break;
+            case "turn-left":
+                element = "左方向";
+                break;
+        }
+        speechText(i + "メートル先" + element + "です");
+    }
+
+    private int shapeDistance(Double element) {
+        int thousands = (int) (element /1000);
+        int hundreds = (int) (element/100);
+        int tens = (int) (element/10);
+
+        if(thousands>=1){
+            return thousands*1000;
+        } else if (hundreds>=2) {
+            return hundreds*100;
+        } else if (hundreds>=1) {
+            return (hundreds*100+tens*10);
+        } else {
+            return tens*10;
+        }
+    }
+
+    private float[] getDistance(double latitude, double longitude, Double next_lat, Double next_lng) {
+        float[] results = new float[3];
+        if (next_lat == null || next_lng == null) {
+            return results;
+        }
+        Location.distanceBetween(latitude, longitude, next_lat, next_lng, results);
+        return results;
     }
 
     @Override
