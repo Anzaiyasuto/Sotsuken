@@ -707,7 +707,9 @@ public class MapsActivity extends FragmentActivity
                 //minX = getListOfMin(route_latitude, lastKnownLocation.getLatitude());
                 //maxX = getListOfMax(route_latitude, lastKnownLocation.getLatitude());
                 //minY = getListOfMin(route_longitude, lastKnownLocation.getLongitude());
-                //maxY = getListOfMax(route_longitude, lastKnownLocation.getLongitude());
+                //maxY = getListOfMax(route_longitude, lastKnownLocation.getLongi
+                //
+                // tude());
                 minX = finalMinX;
                 minY = finalMinY;
                 maxX = finalMaxX;
@@ -1348,25 +1350,30 @@ public class MapsActivity extends FragmentActivity
             mane = navigate_maneuver.element();
             navigateTemplate(mane, shapeDistance(navigate_distance.element()));
         }
-        //3-3 reach 1000m
-        if (next_distance[0] < 1000 && !flag1000m && navigate_distance.element()>=1000 && !tts.isSpeaking()) {
-            flag1000m = true;
-            navigateTemplate(navigate_maneuver.element(), 1000);
-        }
-        //3-4 reach 500m
-        if (next_distance[0] < 500 && !flag500m && navigate_distance.element()>=500 && !tts.isSpeaking()) {
-            flag500m = true;
-            navigateTemplate(navigate_maneuver.element(), 500);
-        }
-        //3-5 reach 300m
-        if (next_distance[0] < 300 && !flag300m && navigate_distance.element()>=300 && !tts.isSpeaking()) {
-            flag300m = true;
-            navigateTemplate(navigate_maneuver.element(), 300);
-        }
+        try {
+            //3-3 reach 1000m
+            if (next_distance[0] < 1000 && !flag1000m && navigate_distance.element()>=1000 && !tts.isSpeaking()) {
+                flag1000m = true;
+                navigateTemplate(navigate_maneuver.element(), 1000);
+            }
+            //3-4 reach 500m
+            if (next_distance[0] < 500 && !flag500m && navigate_distance.element()>=500 && !tts.isSpeaking()) {
+                flag500m = true;
+                navigateTemplate(navigate_maneuver.element(), 500);
+            }
+            //3-5 reach 300m
+            if (next_distance[0] < 300 && !flag300m && navigate_distance.element()>=300 && !tts.isSpeaking()) {
+                flag300m = true;
+                navigateTemplate(navigate_maneuver.element(), 300);
+            }
 
-        if (next_distance[0] < 100 && !flag100m && navigate_distance.element()>=100 && !tts.isSpeaking()) {
-            flag100m = true;
-            navigateTemplate(navigate_maneuver.element(), 100);
+            if (next_distance[0] < 100 && !flag100m && navigate_distance.element()>=100 && !tts.isSpeaking()) {
+                flag100m = true;
+                navigateTemplate(navigate_maneuver.element(), 100);
+            }
+
+        } catch (java.util.NoSuchElementException e) {
+            //e.printStackTrace();
         }
 
     }
