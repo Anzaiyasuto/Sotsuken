@@ -114,6 +114,7 @@ public class MapsActivity extends FragmentActivity
     boolean flag500m = false;
     boolean flag300m = false;
     boolean flag100m = false;
+    boolean flag50m = false;
     private GoogleMap mMap;
     private Marker marker;
     private boolean locationPermissionGranted;
@@ -1340,11 +1341,12 @@ public class MapsActivity extends FragmentActivity
         //3-2 next direction
         if (next_distance[0] > 20 && flagIntersection && !tts.isSpeaking()) {
 
-            flagIntersection = false;
             flag1000m = false;
             flag500m = false;
             flag300m = false;
             flag100m = false;
+            flag50m = false;
+            flagIntersection = false;
 
             String mane, dis;
             mane = navigate_maneuver.element();
@@ -1366,10 +1368,15 @@ public class MapsActivity extends FragmentActivity
                 flag300m = true;
                 navigateTemplate(navigate_maneuver.element(), 300);
             }
-
+            //3-6 reach 100m
             if (next_distance[0] < 100 && !flag100m && navigate_distance.element()>=100 && !tts.isSpeaking()) {
                 flag100m = true;
                 navigateTemplate(navigate_maneuver.element(), 100);
+            }
+            //3-7 reach 50m
+            if (next_distance[0] < 50 && !flag100m && navigate_distance.element()>=50 && !tts.isSpeaking()) {
+                flag100m = true;
+                navigateTemplate(navigate_maneuver.element(), 50);
             }
 
         } catch (java.util.NoSuchElementException e) {
